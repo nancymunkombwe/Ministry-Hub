@@ -3,6 +3,7 @@ import { AuthProvider } from "./context/AuthContext";
 
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import Members from "./pages/Members";
 import PlaceholderPage from "./pages/PlaceholderPage";
 
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -26,16 +27,7 @@ function App() {
                         }
                     >
                         <Route path="/dashboard" element={<Dashboard />} />
-
-                        <Route
-                            path="/members"
-                            element={
-                                <PlaceholderPage
-                                    title="Members"
-                                    description="Manage church member records and profiles."
-                                />
-                            }
-                        />
+                        <Route path="/members" element={<Members />} />
 
                         <Route
                             path="/visitors"

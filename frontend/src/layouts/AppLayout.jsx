@@ -28,54 +28,65 @@ const AppLayout = () => {
                     <BrandLogo size="sidebar" />
 
                     <div className="user-pill">
-                        <span>{user?.full_name}</span>
-                        <small>{user?.role}</small>
+                        <span>{user?.full_name || "Admin User"}</span>
+                        <small>{user?.role || "admin"}</small>
                     </div>
                 </div>
 
                 <nav className="sidebar-nav">
                     <NavLink to="/dashboard">
-                        <FaChartPie /> Dashboard
+                        <FaChartPie />
+                        <span>Dashboard</span>
                     </NavLink>
 
                     <NavLink to="/members">
-                        <FaUsers /> Members
+                        <FaUsers />
+                        <span>Members</span>
                     </NavLink>
 
                     <NavLink to="/visitors">
-                        <FaUserPlus /> Visitors
+                        <FaUserPlus />
+                        <span>Visitors</span>
                     </NavLink>
 
                     <NavLink to="/departments">
-                        <FaLayerGroup /> Departments
+                        <FaLayerGroup />
+                        <span>Departments</span>
                     </NavLink>
 
                     <NavLink to="/attendance">
-                        <FaClipboardCheck /> Attendance
+                        <FaClipboardCheck />
+                        <span>Attendance</span>
                     </NavLink>
 
                     <NavLink to="/events">
-                        <FaCalendarAlt /> Events
+                        <FaCalendarAlt />
+                        <span>Events</span>
                     </NavLink>
 
                     <NavLink to="/announcements">
-                        <FaBullhorn /> Announcements
+                        <FaBullhorn />
+                        <span>Announcements</span>
                     </NavLink>
 
                     <NavLink to="/contributions">
-                        <FaHandHoldingUsd /> Contributions
+                        <FaHandHoldingUsd />
+                        <span>Contributions</span>
                     </NavLink>
 
                     <NavLink to="/care">
-                        <FaHeart /> Care Follow-ups
+                        <FaHeart />
+                        <span>Care Follow-ups</span>
                     </NavLink>
 
                     <NavLink to="/tasks">
-                        <FaTasks /> Tasks
+                        <FaTasks />
+                        <span>Tasks</span>
                     </NavLink>
 
                     <NavLink to="/reports">
-                        <FaFileAlt /> Reports
+                        <FaFileAlt />
+                        <span>Reports</span>
                     </NavLink>
                 </nav>
 
@@ -83,7 +94,8 @@ const AppLayout = () => {
                     <SdaFooter />
 
                     <button onClick={logout} className="sidebar-logout">
-                        <FaSignOutAlt /> Logout
+                        <FaSignOutAlt />
+                        <span>Logout</span>
                     </button>
                 </div>
             </aside>
