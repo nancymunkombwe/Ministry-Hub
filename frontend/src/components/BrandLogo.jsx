@@ -1,11 +1,11 @@
-import { FaChurch } from "react-icons/fa";
-
 const BrandLogo = ({ size = "normal" }) => {
     return (
         <div className={`brand-logo brand-logo-${size}`}>
-            <div className="brand-logo-icon">
-                <FaChurch />
-            </div>
+            <img
+                src="/images/ministry-hub-logo.png"
+                alt="Ministry Hub Logo"
+                className="brand-logo-image"
+            />
 
             <div>
                 <h2>Ministry Hub</h2>

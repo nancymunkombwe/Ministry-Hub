@@ -308,3 +308,73 @@
         padding: 30px;
     }
 }
+.login-illustration {
+    overflow: hidden;
+}
+
+.login-illustration img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 28px;
+}
+
+.login-sda-logo {
+    width: 44px;
+    height: 34px;
+    object-fit: contain;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 4px;
+}
+/* Login page logo and back-home polish */
+
+.back-home-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: rgba(255, 255, 255, 0.9);
+    text-decoration: none;
+    font-weight: 800;
+    margin-bottom: 28px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 10px 14px;
+    border-radius: 999px;
+    width: fit-content;
+}
+
+.back-home-link:hover {
+    color: var(--gold);
+    background: rgba(255, 255, 255, 0.16);
+    transform: translateX(-3px);
+}
+
+.login-sda-logo {
+    width: 62px;
+    height: 46px;
+    object-fit: contain;
+    background: transparent;
+    border-radius: 0;
+    padding: 0;
+}
+
+.login-panel-footer {
+    gap: 14px;
+}
+
+.login-illustration img {
+    object-fit: cover;
+}
+/* Add space between login illustration and SDA footer */
+
+.login-brand-content {
+    padding-bottom: 35px;
+}
+
+.login-panel-footer {
+    margin-top: 35px;
+}
+
+.login-illustration {
+    margin-bottom: 25px;
+}

@@ -1,7 +1,12 @@
 const SdaFooter = () => {
     return (
         <div className="sda-footer">
-            <div className="sda-mark">SDA</div>
+            <img
+                src="/images/sda-logo.png"
+                alt="Seventh-day Adventist Logo"
+                className="sda-logo-image"
+            />
+
             <p>Serving the church through organized ministry.</p>
         </div>
     );

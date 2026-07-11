@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FaEnvelope, FaLock, FaBible, FaMusic } from "react-icons/fa";
+import { FaEnvelope, FaLock, FaArrowLeft } from "react-icons/fa";
 
 import { useAuth } from "../context/AuthContext";
 import BrandLogo from "../components/BrandLogo";
@@ -36,6 +36,10 @@ const Login = () => {
         <div className="login-page">
             <section className="login-brand-panel">
                 <div className="login-brand-content">
+                    <Link to="/" className="back-home-link">
+                        <FaArrowLeft /> Back to Home
+                    </Link>
+
                     <BrandLogo size="large" />
 
                     <div className="login-message">
@@ -47,32 +51,19 @@ const Login = () => {
                     </div>
 
                     <div className="login-illustration">
-                        <div className="church-shape">
-                            <div className="church-roof"></div>
-                            <div className="church-body">
-                                <span></span>
-                            </div>
-                        </div>
-
-                        <div className="people-row">
-                            <div></div>
-                            <div></div>
-                            <div></div>
-                        </div>
-                    </div>
-
-                    <div className="login-resource-pills">
-                        <span>
-                            <FaBible /> Bible
-                        </span>
-                        <span>
-                            <FaMusic /> Hymns
-                        </span>
+                        <img
+                            src="/images/login-church-people.png"
+                            alt="Church community illustration"
+                        />
                     </div>
                 </div>
 
                 <div className="login-panel-footer">
-                    <span className="sda-small-mark">SDA</span>
+                    <img
+                        src="/images/sda-logo.png"
+                        alt="Seventh-day Adventist Logo"
+                        className="login-sda-logo"
+                    />
                     <span>Faith-based ministry administration</span>
                 </div>
             </section>
