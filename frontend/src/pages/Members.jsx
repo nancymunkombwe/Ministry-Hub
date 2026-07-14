@@ -6,7 +6,9 @@ import {
     FaEdit,
     FaTimes,
     FaSave,
-    FaUsers
+    FaUsers,
+    FaUserSlash,
+    FaUserCheck
 } from "react-icons/fa";
 
 import API from "../api/api";
@@ -25,10 +27,14 @@ const emptyForm = {
 
 const Members = () => {
     const [members, setMembers] = useState([]);
+
     const [formData, setFormData] = useState(emptyForm);
     const [searchTerm, setSearchTerm] = useState("");
     const [editingId, setEditingId] = useState(null);
     const [showForm, setShowForm] = useState(false);
+
+    const [memberToToggle, setMemberToToggle] = useState(null);
+    const [updatingStatus, setUpdatingStatus] = useState(false);
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -39,7 +45,11 @@ const Members = () => {
         return member.id || member.member_id;
     };
 
-    const formatDateForInput = (dateValue) => {
+    const getMemberName = (member) => {
+        return `${member.first_name || ""} ${member.last_name || ""}`.trim();
+    };
+
+    const formatDate = (dateValue) => {
         if (!dateValue) return "";
         return String(dateValue).split("T")[0];
     };
@@ -73,12 +83,10 @@ const Members = () => {
 
     const filteredMembers = useMemo(() => {
         return members.filter((member) => {
-            const fullName = `${member.first_name || ""} ${
-                member.last_name || ""
-            }`.toLowerCase();
-
             const searchableText = `
-                ${fullName}
+                ${member.first_name || ""}
+                ${member.last_name || ""}
+                ${member.gender || ""}
                 ${member.phone || ""}
                 ${member.email || ""}
                 ${member.department || ""}
@@ -89,6 +97,14 @@ const Members = () => {
         });
     }, [members, searchTerm]);
 
+    const activeMembers = members.filter(
+        (member) => (member.status || "Active") === "Active"
+    ).length;
+
+    const inactiveMembers = members.filter(
+        (member) => member.status === "Inactive"
+    ).length;
+
     const handleChange = (event) => {
         const { name, value } = event.target;
 
@@ -98,30 +114,49 @@ const Members = () => {
         }));
     };
 
+    const openAddForm = () => {
+        setFormData(emptyForm);
+        setEditingId(null);
+        setShowForm(true);
+        setError("");
+        setSuccess("");
+    };
+
     const resetForm = () => {
         setFormData(emptyForm);
         setEditingId(null);
         setShowForm(false);
         setError("");
-        setSuccess("");
     };
 
     const handleSubmit = async (event) => {
         event.preventDefault();
+
         setSaving(true);
         setError("");
         setSuccess("");
 
-        if (!formData.first_name.trim() || !formData.last_name.trim()) {
-            setError("First name and last name are required.");
+        if (
+            !formData.first_name.trim() ||
+            !formData.last_name.trim() ||
+            !formData.gender
+        ) {
+            setError("First name, last name, and gender are required.");
             setSaving(false);
             return;
         }
 
         try {
             const payload = {
-                ...formData,
-                baptism_date: formData.baptism_date || null
+                first_name: formData.first_name,
+                last_name: formData.last_name,
+                gender: formData.gender,
+                phone: formData.phone,
+                email: formData.email,
+                address: formData.address,
+                department: formData.department,
+                baptism_date: formData.baptism_date || null,
+                status: formData.status
             };
 
             if (editingId) {
@@ -144,6 +179,61 @@ const Members = () => {
         }
     };
 
+    const openStatusModal = (member) => {
+        setMemberToToggle(member);
+        setError("");
+        setSuccess("");
+    };
+
+    const closeStatusModal = () => {
+        setMemberToToggle(null);
+    };
+
+    const confirmStatusChange = async () => {
+        if (!memberToToggle) {
+            return;
+        }
+
+        setUpdatingStatus(true);
+        setError("");
+        setSuccess("");
+
+        const currentStatus = memberToToggle.status || "Active";
+        const newStatus = currentStatus === "Active" ? "Inactive" : "Active";
+
+        try {
+            const payload = {
+                first_name: memberToToggle.first_name || "",
+                last_name: memberToToggle.last_name || "",
+                gender: memberToToggle.gender || "Female",
+                phone: memberToToggle.phone || "",
+                email: memberToToggle.email || "",
+                address: memberToToggle.address || "",
+                department: memberToToggle.department || "",
+                baptism_date: formatDate(memberToToggle.baptism_date) || null,
+                status: newStatus
+            };
+
+            await API.put(`/members/${getMemberId(memberToToggle)}`, payload);
+
+            setSuccess(
+                newStatus === "Inactive"
+                    ? "Member deactivated successfully."
+                    : "Member activated successfully."
+            );
+
+            setMemberToToggle(null);
+            await fetchMembers();
+        } catch (error) {
+            setError(
+                error.response?.data?.message ||
+                    "Failed to update member status. Please try again."
+            );
+        } finally {
+            setUpdatingStatus(false);
+        }
+    };
+
     const handleEdit = (member) => {
         setEditingId(getMemberId(member));
 
@@ -155,13 +245,14 @@ const Members = () => {
             email: member.email || "",
             address: member.address || "",
             department: member.department || "",
-            baptism_date: formatDateForInput(member.baptism_date),
+            baptism_date: formatDate(member.baptism_date),
             status: member.status || "Active"
         });
 
         setShowForm(true);
         setSuccess("");
         setError("");
+
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
@@ -171,17 +262,10 @@ const Members = () => {
                 <div>
                     <span className="eyebrow">Member Management</span>
                     <h1>Members</h1>
-                    <p>Register, view, search, and update church member records.</p>
+                    <p>Register, update, and manage church members.</p>
                 </div>
 
-                <button
-                    className="primary-btn"
-                    onClick={() => {
-                        setShowForm(true);
-                        setEditingId(null);
-                        setFormData(emptyForm);
-                    }}
-                >
+                <button className="primary-btn" onClick={openAddForm}>
                     <FaPlus /> Add Member
                 </button>
             </div>
@@ -189,15 +273,92 @@ const Members = () => {
             {error && <div className="page-error">{error}</div>}
             {success && <div className="success-message">{success}</div>}
 
+            {memberToToggle && (
+                <div className="modal-overlay">
+                    <div className="delete-modal">
+                        <div className="delete-modal-icon">
+                            {(memberToToggle.status || "Active") === "Active" ? (
+                                <FaUserSlash />
+                            ) : (
+                                <FaUserCheck />
+                            )}
+                        </div>
+
+                        <h2>
+                            {(memberToToggle.status || "Active") === "Active"
+                                ? "Deactivate Member?"
+                                : "Activate Member?"}
+                        </h2>
+
+                        <p>
+                            Are you sure you want to{" "}
+                            {(memberToToggle.status || "Active") === "Active"
+                                ? "deactivate"
+                                : "activate"}{" "}
+                            <strong>{getMemberName(memberToToggle)}</strong>?
+                        </p>
+
+                        <p className="delete-warning">
+                            The member record will remain in the system for history.
+                        </p>
+
+                        <div className="delete-modal-actions">
+                            <button
+                                className="secondary-btn"
+                                onClick={closeStatusModal}
+                                disabled={updatingStatus}
+                            >
+                                Cancel
+                            </button>
+
+                            <button
+                                className="danger-btn"
+                                onClick={confirmStatusChange}
+                                disabled={updatingStatus}
+                            >
+                                {updatingStatus
+                                    ? "Updating..."
+                                    : (memberToToggle.status || "Active") === "Active"
+                                    ? "Yes, Deactivate"
+                                    : "Yes, Activate"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className="dashboard-grid">
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaUsers />
+                    </div>
+                    <h3>Total Members</h3>
+                    <p>{members.length}</p>
+                </div>
+
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaUserCheck />
+                    </div>
+                    <h3>Active Members</h3>
+                    <p>{activeMembers}</p>
+                </div>
+
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaUserSlash />
+                    </div>
+                    <h3>Inactive Members</h3>
+                    <p>{inactiveMembers}</p>
+                </div>
+            </div>
+
             {showForm && (
                 <div className="form-card">
                     <div className="section-header">
                         <div>
                             <h2>{editingId ? "Edit Member" : "Add New Member"}</h2>
-                            <p>
-                                Fill in the member details below. Required fields are
-                                first name and last name.
-                            </p>
+                            <p>Enter the member details below.</p>
                         </div>
 
                         <button className="icon-btn" onClick={resetForm}>
@@ -245,7 +406,7 @@ const Members = () => {
                                     name="phone"
                                     value={formData.phone}
                                     onChange={handleChange}
-                                    placeholder="e.g. 0977123456"
+                                    placeholder="e.g. 0970000000"
                                 />
                             </div>
 
@@ -256,7 +417,7 @@ const Members = () => {
                                     type="email"
                                     value={formData.email}
                                     onChange={handleChange}
-                                    placeholder="e.g. john@email.com"
+                                    placeholder="e.g. member@email.com"
                                 />
                             </div>
 
@@ -289,8 +450,6 @@ const Members = () => {
                                 >
                                     <option value="Active">Active</option>
                                     <option value="Inactive">Inactive</option>
-                                    <option value="Transferred">Transferred</option>
-                                    <option value="Missing">Missing</option>
                                 </select>
                             </div>
 
@@ -300,8 +459,8 @@ const Members = () => {
                                     name="address"
                                     value={formData.address}
                                     onChange={handleChange}
-                                    placeholder="Enter member address"
                                     rows="3"
+                                    placeholder="Enter member address"
                                 ></textarea>
                             </div>
                         </div>
@@ -363,7 +522,7 @@ const Members = () => {
                     <div className="empty-state">
                         <FaUsers />
                         <h3>No members found</h3>
-                        <p>Add your first church member to get started.</p>
+                        <p>Add a member to get started.</p>
                     </div>
                 ) : (
                     <div className="table-wrapper">
@@ -373,10 +532,9 @@ const Members = () => {
                                     <th>Name</th>
                                     <th>Gender</th>
                                     <th>Phone</th>
-                                    <th>Email</th>
                                     <th>Department</th>
                                     <th>Status</th>
-                                    <th>Action</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
 
@@ -384,15 +542,15 @@ const Members = () => {
                                 {filteredMembers.map((member) => (
                                     <tr key={getMemberId(member)}>
                                         <td>
-                                            <strong>
-                                                {member.first_name}{" "}
-                                                {member.last_name}
-                                            </strong>
+                                            <strong>{getMemberName(member)}</strong>
+                                            <br />
+                                            <small>{member.email || ""}</small>
                                         </td>
+
                                         <td>{member.gender || "-"}</td>
                                         <td>{member.phone || "-"}</td>
-                                        <td>{member.email || "-"}</td>
                                         <td>{member.department || "-"}</td>
+
                                         <td>
                                             <span
                                                 className={`status-badge ${
@@ -402,13 +560,34 @@ const Members = () => {
                                                 {member.status || "Active"}
                                             </span>
                                         </td>
+
                                         <td>
-                                            <button
-                                                className="table-action-btn"
-                                                onClick={() => handleEdit(member)}
-                                            >
-                                                <FaEdit /> Edit
-                                            </button>
+                                            <div className="table-actions-inline">
+                                                <button
+                                                    className="table-action-btn"
+                                                    onClick={() => handleEdit(member)}
+                                                >
+                                                    <FaEdit /> Edit
+                                                </button>
+
+                                                <button
+                                                    className="table-delete-btn"
+                                                    onClick={() =>
+                                                        openStatusModal(member)
+                                                    }
+                                                >
+                                                    {(member.status || "Active") ===
+                                                    "Active" ? (
+                                                        <>
+                                                            <FaUserSlash /> Deactivate
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <FaUserCheck /> Activate
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}

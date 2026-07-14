@@ -5,6 +5,7 @@ const {
     getVisitors,
     getVisitorById,
     updateVisitor,
+    deleteVisitor,
     createVisitorFollowUp,
     getVisitorFollowUps
 } = require("../controllers/visitorController");
@@ -18,10 +19,30 @@ const router = express.Router();
 
 router.post("/", protect, authorize("admin", "leader"), createVisitor);
 router.get("/", protect, getVisitors);
-router.get("/:id", protect, getVisitorById);
-router.put("/:id", protect, authorize("admin", "leader"), updateVisitor);
 
-router.post("/followups", protect, authorize("admin", "leader"), createVisitorFollowUp);
+router.post(
+    "/followups",
+    protect,
+    authorize("admin", "leader"),
+    createVisitorFollowUp
+);
+
 router.get("/:visitorId/followups", protect, getVisitorFollowUps);
+
+router.get("/:id", protect, getVisitorById);
+
+router.put(
+    "/:id",
+    protect,
+    authorize("admin", "leader"),
+    updateVisitor
+);
+
+router.delete(
+    "/:id",
+    protect,
+    authorize("admin"),
+    deleteVisitor
+);
 
 module.exports = router;

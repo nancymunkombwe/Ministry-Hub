@@ -1,19 +1,16 @@
 const db = require("../config/db");
 
-// ADD VISITOR
+// CREATE VISITOR
 const createVisitor = (req, res) => {
     const {
         first_name,
         last_name,
-        gender,
         phone,
         email,
+        address,
         visit_date,
         invited_by,
-        interested_in_bible_study,
-        wants_follow_up,
-        follow_up_status,
-        notes
+        follow_up_status
     } = req.body;
 
     if (!first_name || !last_name || !visit_date) {
@@ -23,35 +20,46 @@ const createVisitor = (req, res) => {
         });
     }
 
+    const allowedStatuses = [
+        "New Visitor",
+        "Contacted",
+        "Interested",
+        "Joined",
+        "Not Interested"
+    ];
+
+    const selectedStatus = follow_up_status || "New Visitor";
+
+    if (!allowedStatuses.includes(selectedStatus)) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid follow-up status"
+        });
+    }
+
     const sql = `
         INSERT INTO visitors (
             first_name,
             last_name,
-            gender,
             phone,
             email,
+            address,
             visit_date,
             invited_by,
-            interested_in_bible_study,
-            wants_follow_up,
-            follow_up_status,
-            notes
+            follow_up_status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const values = [
         first_name,
         last_name,
-        gender || null,
         phone || null,
         email || null,
+        address || null,
         visit_date,
         invited_by || null,
-        interested_in_bible_study || "Unknown",
-        wants_follow_up || "Yes",
-        follow_up_status || "New Visitor",
-        notes || null
+        selectedStatus
     ];
 
     db.query(sql, values, (error, result) => {
@@ -74,9 +82,20 @@ const createVisitor = (req, res) => {
 // GET ALL VISITORS
 const getVisitors = (req, res) => {
     const sql = `
-        SELECT *
+        SELECT
+            id,
+            first_name,
+            last_name,
+            CONCAT(first_name, ' ', last_name) AS full_name,
+            phone,
+            email,
+            address,
+            visit_date,
+            invited_by,
+            follow_up_status,
+            created_at
         FROM visitors
-        ORDER BY created_at DESC
+        ORDER BY visit_date DESC, created_at DESC
     `;
 
     db.query(sql, (error, results) => {
@@ -100,7 +119,24 @@ const getVisitors = (req, res) => {
 const getVisitorById = (req, res) => {
     const { id } = req.params;
 
-    db.query("SELECT * FROM visitors WHERE id = ?", [id], (error, results) => {
+    const sql = `
+        SELECT
+            id,
+            first_name,
+            last_name,
+            CONCAT(first_name, ' ', last_name) AS full_name,
+            phone,
+            email,
+            address,
+            visit_date,
+            invited_by,
+            follow_up_status,
+            created_at
+        FROM visitors
+        WHERE id = ?
+    `;
+
+    db.query(sql, [id], (error, results) => {
         if (error) {
             return res.status(500).json({
                 success: false,
@@ -130,46 +166,61 @@ const updateVisitor = (req, res) => {
     const {
         first_name,
         last_name,
-        gender,
         phone,
         email,
+        address,
         visit_date,
         invited_by,
-        interested_in_bible_study,
-        wants_follow_up,
-        follow_up_status,
-        notes
+        follow_up_status
     } = req.body;
+
+    if (!first_name || !last_name || !visit_date) {
+        return res.status(400).json({
+            success: false,
+            message: "First name, last name, and visit date are required"
+        });
+    }
+
+    const allowedStatuses = [
+        "New Visitor",
+        "Contacted",
+        "Interested",
+        "Joined",
+        "Not Interested"
+    ];
+
+    const selectedStatus = follow_up_status || "New Visitor";
+
+    if (!allowedStatuses.includes(selectedStatus)) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid follow-up status"
+        });
+    }
 
     const sql = `
         UPDATE visitors
         SET
             first_name = ?,
             last_name = ?,
-            gender = ?,
             phone = ?,
             email = ?,
+            address = ?,
             visit_date = ?,
             invited_by = ?,
-            interested_in_bible_study = ?,
-            wants_follow_up = ?,
-            follow_up_status = ?,
-            notes = ?
+            follow_up_status = ?
         WHERE id = ?
     `;
 
     const values = [
         first_name,
         last_name,
-        gender || null,
         phone || null,
         email || null,
+        address || null,
         visit_date,
         invited_by || null,
-        interested_in_bible_study || "Unknown",
-        wants_follow_up || "Yes",
-        follow_up_status || "New Visitor",
-        notes || null,
+        selectedStatus,
         id
     ];
 
@@ -196,14 +247,67 @@ const updateVisitor = (req, res) => {
     });
 };
 
-// ADD VISITOR FOLLOW-UP
-const createVisitorFollowUp = (req, res) => {
-    const { visitor_id, follow_up_date, follow_up_method, notes } = req.body;
+// DELETE VISITOR
+const deleteVisitor = (req, res) => {
+    const { id } = req.params;
 
-    if (!visitor_id || !follow_up_date) {
+    const deleteFollowUpsSql = `
+        DELETE FROM visitor_followups
+        WHERE visitor_id = ?
+    `;
+
+    const deleteVisitorSql = `
+        DELETE FROM visitors
+        WHERE id = ?
+    `;
+
+    db.query(deleteFollowUpsSql, [id], (followUpError) => {
+        if (followUpError) {
+            return res.status(500).json({
+                success: false,
+                message: "Failed to delete visitor follow-ups",
+                error: followUpError.message
+            });
+        }
+
+        db.query(deleteVisitorSql, [id], (visitorError, result) => {
+            if (visitorError) {
+                return res.status(500).json({
+                    success: false,
+                    message: "Failed to delete visitor",
+                    error: visitorError.message
+                });
+            }
+
+            if (result.affectedRows === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Visitor not found"
+                });
+            }
+
+            res.json({
+                success: true,
+                message: "Visitor deleted successfully"
+            });
+        });
+    });
+};
+
+// CREATE VISITOR FOLLOW-UP
+const createVisitorFollowUp = (req, res) => {
+    const {
+        visitor_id,
+        follow_up_date,
+        method,
+        notes,
+        status
+    } = req.body;
+
+    if (!visitor_id || !follow_up_date || !method) {
         return res.status(400).json({
             success: false,
-            message: "Visitor ID and follow-up date are required"
+            message: "Visitor ID, follow-up date, and method are required"
         });
     }
 
@@ -211,18 +315,20 @@ const createVisitorFollowUp = (req, res) => {
         INSERT INTO visitor_followups (
             visitor_id,
             follow_up_date,
-            follow_up_method,
+            method,
             notes,
-            handled_by
+            status,
+            followed_by
         )
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?)
     `;
 
     const values = [
         visitor_id,
         follow_up_date,
-        follow_up_method || "Call",
+        method,
         notes || null,
+        status || "Pending",
         req.user.id
     ];
 
@@ -237,29 +343,30 @@ const createVisitorFollowUp = (req, res) => {
 
         res.status(201).json({
             success: true,
-            message: "Visitor follow-up recorded successfully",
+            message: "Visitor follow-up created successfully",
             followup_id: result.insertId
         });
     });
 };
 
-// GET FOLLOW-UPS FOR ONE VISITOR
+// GET VISITOR FOLLOW-UP HISTORY
 const getVisitorFollowUps = (req, res) => {
     const { visitorId } = req.params;
 
     const sql = `
-        SELECT 
+        SELECT
             vf.id,
             vf.visitor_id,
             vf.follow_up_date,
-            vf.follow_up_method,
+            vf.method,
             vf.notes,
+            vf.status,
             vf.created_at,
-            u.full_name AS handled_by_name
+            u.full_name AS followed_by_name
         FROM visitor_followups vf
-        LEFT JOIN users u ON vf.handled_by = u.id
+        LEFT JOIN users u ON vf.followed_by = u.id
         WHERE vf.visitor_id = ?
-        ORDER BY vf.follow_up_date DESC
+        ORDER BY vf.follow_up_date DESC, vf.created_at DESC
     `;
 
     db.query(sql, [visitorId], (error, results) => {
@@ -284,6 +391,7 @@ module.exports = {
     getVisitors,
     getVisitorById,
     updateVisitor,
+    deleteVisitor,
     createVisitorFollowUp,
     getVisitorFollowUps
 };

@@ -1,11 +1,63 @@
 const db = require("../config/db");
 
+// CREATE DEPARTMENT
+const createDepartment = (req, res) => {
+    const { name, description } = req.body;
+
+    if (!name) {
+        return res.status(400).json({
+            success: false,
+            message: "Department name is required"
+        });
+    }
+
+    const sql = `
+        INSERT INTO departments (
+            name,
+            description
+        )
+        VALUES (?, ?)
+    `;
+
+    const values = [
+        name,
+        description || null
+    ];
+
+    db.query(sql, values, (error, result) => {
+        if (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Failed to create department",
+                error: error.message
+            });
+        }
+
+        res.status(201).json({
+            success: true,
+            message: "Department created successfully",
+            department_id: result.insertId
+        });
+    });
+};
+
 // GET ALL DEPARTMENTS
 const getDepartments = (req, res) => {
     const sql = `
-        SELECT *
-        FROM departments
-        ORDER BY name ASC
+        SELECT
+            d.id,
+            d.name,
+            d.description,
+            d.created_at,
+            COUNT(md.member_id) AS member_count
+        FROM departments d
+        LEFT JOIN member_departments md ON d.id = md.department_id
+        GROUP BY
+            d.id,
+            d.name,
+            d.description,
+            d.created_at
+        ORDER BY d.name ASC
     `;
 
     db.query(sql, (error, results) => {
@@ -29,7 +81,24 @@ const getDepartments = (req, res) => {
 const getDepartmentById = (req, res) => {
     const { id } = req.params;
 
-    db.query("SELECT * FROM departments WHERE id = ?", [id], (error, results) => {
+    const sql = `
+        SELECT
+            d.id,
+            d.name,
+            d.description,
+            d.created_at,
+            COUNT(md.member_id) AS member_count
+        FROM departments d
+        LEFT JOIN member_departments md ON d.id = md.department_id
+        WHERE d.id = ?
+        GROUP BY
+            d.id,
+            d.name,
+            d.description,
+            d.created_at
+    `;
+
+    db.query(sql, [id], (error, results) => {
         if (error) {
             return res.status(500).json({
                 success: false,
@@ -52,8 +121,9 @@ const getDepartmentById = (req, res) => {
     });
 };
 
-// CREATE NEW DEPARTMENT
-const createDepartment = (req, res) => {
+// UPDATE DEPARTMENT
+const updateDepartment = (req, res) => {
+    const { id } = req.params;
     const { name, description } = req.body;
 
     if (!name) {
@@ -64,30 +134,45 @@ const createDepartment = (req, res) => {
     }
 
     const sql = `
-        INSERT INTO departments (name, description)
-        VALUES (?, ?)
+        UPDATE departments
+        SET
+            name = ?,
+            description = ?
+        WHERE id = ?
     `;
 
-    db.query(sql, [name, description || null], (error, result) => {
+    const values = [
+        name,
+        description || null,
+        id
+    ];
+
+    db.query(sql, values, (error, result) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to create department",
+                message: "Failed to update department",
                 error: error.message
             });
         }
 
-        res.status(201).json({
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Department not found"
+            });
+        }
+
+        res.json({
             success: true,
-            message: "Department created successfully",
-            department_id: result.insertId
+            message: "Department updated successfully"
         });
     });
 };
 
 // ASSIGN MEMBER TO DEPARTMENT
 const assignMemberToDepartment = (req, res) => {
-    const { member_id, department_id, role_in_department } = req.body;
+    const { member_id, department_id } = req.body;
 
     if (!member_id || !department_id) {
         return res.status(400).json({
@@ -96,53 +181,66 @@ const assignMemberToDepartment = (req, res) => {
         });
     }
 
-    const sql = `
-        INSERT INTO member_departments (member_id, department_id, role_in_department)
-        VALUES (?, ?, ?)
+    const checkSql = `
+        SELECT id
+        FROM member_departments
+        WHERE member_id = ? AND department_id = ?
     `;
 
-    const values = [
-        member_id,
-        department_id,
-        role_in_department || "Member"
-    ];
-
-    db.query(sql, values, (error, result) => {
-        if (error) {
-            if (error.code === "ER_DUP_ENTRY") {
-                return res.status(409).json({
-                    success: false,
-                    message: "This member already belongs to this department"
-                });
-            }
-
+    db.query(checkSql, [member_id, department_id], (checkError, existing) => {
+        if (checkError) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to assign member to department",
-                error: error.message
+                message: "Failed to check department assignment",
+                error: checkError.message
             });
         }
 
-        res.status(201).json({
-            success: true,
-            message: "Member assigned to department successfully",
-            assignment_id: result.insertId
+        if (existing.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Member is already assigned to this department"
+            });
+        }
+
+        const insertSql = `
+            INSERT INTO member_departments (
+                member_id,
+                department_id
+            )
+            VALUES (?, ?)
+        `;
+
+        db.query(insertSql, [member_id, department_id], (insertError, result) => {
+            if (insertError) {
+                return res.status(500).json({
+                    success: false,
+                    message: "Failed to assign member to department",
+                    error: insertError.message
+                });
+            }
+
+            res.status(201).json({
+                success: true,
+                message: "Member assigned to department successfully",
+                assignment_id: result.insertId
+            });
         });
     });
 };
 
-// GET DEPARTMENTS FOR ONE MEMBER
+// GET MEMBER DEPARTMENTS
 const getMemberDepartments = (req, res) => {
     const { memberId } = req.params;
 
     const sql = `
-        SELECT 
+        SELECT
             md.id AS assignment_id,
-            md.role_in_department,
-            md.created_at,
-            d.id AS department_id,
+            md.member_id,
+            md.department_id,
             d.name AS department_name,
-            d.description
+            d.description,
+            md.created_at
         FROM member_departments md
         JOIN departments d ON md.department_id = d.id
         WHERE md.member_id = ?
@@ -198,11 +296,60 @@ const removeMemberFromDepartment = (req, res) => {
     });
 };
 
+// DELETE DEPARTMENT
+const deleteDepartment = (req, res) => {
+    const { id } = req.params;
+
+    const deleteAssignmentsSql = `
+        DELETE FROM member_departments
+        WHERE department_id = ?
+    `;
+
+    const deleteDepartmentSql = `
+        DELETE FROM departments
+        WHERE id = ?
+    `;
+
+    db.query(deleteAssignmentsSql, [id], (assignmentError) => {
+        if (assignmentError) {
+            return res.status(500).json({
+                success: false,
+                message: "Failed to remove department assignments",
+                error: assignmentError.message
+            });
+        }
+
+        db.query(deleteDepartmentSql, [id], (departmentError, result) => {
+            if (departmentError) {
+                return res.status(500).json({
+                    success: false,
+                    message: "Failed to delete department",
+                    error: departmentError.message
+                });
+            }
+
+            if (result.affectedRows === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Department not found"
+                });
+            }
+
+            res.json({
+                success: true,
+                message: "Department deleted successfully"
+            });
+        });
+    });
+};
+
 module.exports = {
+    createDepartment,
     getDepartments,
     getDepartmentById,
-    createDepartment,
+    updateDepartment,
     assignMemberToDepartment,
     getMemberDepartments,
-    removeMemberFromDepartment
+    removeMemberFromDepartment,
+    deleteDepartment
 };

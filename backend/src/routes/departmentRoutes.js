@@ -1,12 +1,14 @@
 const express = require("express");
 
 const {
+    createDepartment,
     getDepartments,
     getDepartmentById,
-    createDepartment,
+    updateDepartment,
     assignMemberToDepartment,
     getMemberDepartments,
-    removeMemberFromDepartment
+    removeMemberFromDepartment,
+    deleteDepartment
 } = require("../controllers/departmentController");
 
 const {
@@ -16,18 +18,39 @@ const {
 
 const router = express.Router();
 
-router.get("/", protect, getDepartments);
-router.get("/member/:memberId", protect, getMemberDepartments);
-router.get("/:id", protect, getDepartmentById);
-
 router.post("/", protect, authorize("admin"), createDepartment);
-router.post("/assign", protect, authorize("admin", "leader"), assignMemberToDepartment);
+router.get("/", protect, getDepartments);
+
+router.post(
+    "/assign",
+    protect,
+    authorize("admin", "leader"),
+    assignMemberToDepartment
+);
+
+router.get("/member/:memberId", protect, getMemberDepartments);
 
 router.delete(
     "/member/:memberId/:departmentId",
     protect,
     authorize("admin", "leader"),
     removeMemberFromDepartment
+);
+
+router.get("/:id", protect, getDepartmentById);
+
+router.put(
+    "/:id",
+    protect,
+    authorize("admin"),
+    updateDepartment
+);
+
+router.delete(
+    "/:id",
+    protect,
+    authorize("admin"),
+    deleteDepartment
 );
 
 module.exports = router;

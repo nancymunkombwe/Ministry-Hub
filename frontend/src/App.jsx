@@ -1,11 +1,19 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 
-import Login from "./pages/Login";
 import LandingPage from "./pages/LandingPage";
+import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Members from "./pages/Members";
-import PlaceholderPage from "./pages/PlaceholderPage";
+import Visitors from "./pages/Visitors";
+import Departments from "./pages/Departments";
+import Attendance from "./pages/Attendance";
+import Events from "./pages/Events";
+import Announcements from "./pages/Announcements";
+import Contributions from "./pages/Contributions";
+import CareFollowups from "./pages/CareFollowups";
+import Tasks from "./pages/Tasks";
+import Reports from "./pages/Reports";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import AppLayout from "./layouts/AppLayout";
@@ -29,96 +37,21 @@ function App() {
                     >
                         <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/members" element={<Members />} />
-
-                        <Route
-                            path="/visitors"
-                            element={
-                                <PlaceholderPage
-                                    title="Visitors"
-                                    description="Manage visitor records and follow-up status."
-                                />
-                            }
-                        />
-
-                        <Route
-                            path="/departments"
-                            element={
-                                <PlaceholderPage
-                                    title="Departments"
-                                    description="Manage SDA departments and member assignments."
-                                />
-                            }
-                        />
-
-                        <Route
-                            path="/attendance"
-                            element={
-                                <PlaceholderPage
-                                    title="Attendance"
-                                    description="Track Sabbath and departmental attendance."
-                                />
-                            }
-                        />
-
-                        <Route
-                            path="/events"
-                            element={
-                                <PlaceholderPage
-                                    title="Events"
-                                    description="Manage church events and Sabbath programs."
-                                />
-                            }
-                        />
-
+                        <Route path="/visitors" element={<Visitors />} />
+                        <Route path="/departments" element={<Departments />} />
+                        <Route path="/attendance" element={<Attendance />} />
+                        <Route path="/events" element={<Events />} />
                         <Route
                             path="/announcements"
-                            element={
-                                <PlaceholderPage
-                                    title="Announcements"
-                                    description="Create announcements and WhatsApp-ready messages."
-                                />
-                            }
+                            element={<Announcements />}
                         />
-
                         <Route
                             path="/contributions"
-                            element={
-                                <PlaceholderPage
-                                    title="Contributions"
-                                    description="Record tithes, offerings, and donations."
-                                />
-                            }
+                            element={<Contributions />}
                         />
-
-                        <Route
-                            path="/care"
-                            element={
-                                <PlaceholderPage
-                                    title="Care Follow-ups"
-                                    description="Track members needing visitation, prayer, or care."
-                                />
-                            }
-                        />
-
-                        <Route
-                            path="/tasks"
-                            element={
-                                <PlaceholderPage
-                                    title="Tasks"
-                                    description="Assign and track church leader tasks."
-                                />
-                            }
-                        />
-
-                        <Route
-                            path="/reports"
-                            element={
-                                <PlaceholderPage
-                                    title="Reports"
-                                    description="View church health, attendance, and finance summaries."
-                                />
-                            }
-                        />
+                        <Route path="/care" element={<CareFollowups />} />
+                        <Route path="/tasks" element={<Tasks />} />
+                        <Route path="/reports" element={<Reports />} />
                     </Route>
                 </Routes>
             </BrowserRouter>
