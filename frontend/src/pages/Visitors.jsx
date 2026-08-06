@@ -7,10 +7,16 @@ import {
     FaTimes,
     FaSave,
     FaUserPlus,
-    FaTrash
+    FaTrash,
+    FaUsers
 } from "react-icons/fa";
 
 import API from "../api/api";
+import { useAuth } from "../context/AuthContext";
+import {
+    canManageVisitors,
+    getNoPermissionMessage
+} from "../utils/permissions";
 
 const emptyForm = {
     full_name: "",
@@ -22,21 +28,61 @@ const emptyForm = {
     follow_up_status: "New Visitor"
 };
 
+const createEmptyBulkRow = () => ({
+    full_name: "",
+    phone: "",
+    email: "",
+    address: "",
+    visit_date: "",
+    invited_by: "",
+    follow_up_status: "New Visitor"
+});
+
 const Visitors = () => {
+    const { user } = useAuth();
+
+    const role = user?.role || "admin";
+    const canEditVisitors = canManageVisitors(role);
+
     const [visitors, setVisitors] = useState([]);
 
     const [formData, setFormData] = useState(emptyForm);
+    const [bulkRows, setBulkRows] = useState([
+        createEmptyBulkRow(),
+        createEmptyBulkRow(),
+        createEmptyBulkRow(),
+        createEmptyBulkRow(),
+        createEmptyBulkRow()
+    ]);
+
     const [searchTerm, setSearchTerm] = useState("");
     const [editingId, setEditingId] = useState(null);
+
     const [showForm, setShowForm] = useState(false);
+    const [showBulkForm, setShowBulkForm] = useState(false);
 
     const [visitorToDelete, setVisitorToDelete] = useState(null);
     const [deleting, setDeleting] = useState(false);
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [savingBulk, setSavingBulk] = useState(false);
+
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+
+    const scrollToForm = () => {
+        setTimeout(() => {
+            const formCard = document.querySelector(".form-card");
+
+            if (formCard) {
+                formCard.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start"
+                });
+            }
+        }, 100);
+    };
 
     const getVisitorId = (visitor) => {
         return visitor.id || visitor.visitor_id;
@@ -121,12 +167,71 @@ const Visitors = () => {
         }));
     };
 
+    const handleBulkChange = (index, field, value) => {
+        setBulkRows((previousRows) =>
+            previousRows.map((row, rowIndex) =>
+                rowIndex === index
+                    ? {
+                          ...row,
+                          [field]: value
+                      }
+                    : row
+            )
+        );
+    };
+
+    const addBulkRow = () => {
+        setBulkRows((previousRows) => [
+            ...previousRows,
+            createEmptyBulkRow()
+        ]);
+    };
+
+    const removeBulkRow = (index) => {
+        setBulkRows((previousRows) => {
+            if (previousRows.length === 1) {
+                return previousRows;
+            }
+
+            return previousRows.filter((_, rowIndex) => rowIndex !== index);
+        });
+    };
+
     const openAddForm = () => {
+        if (!canEditVisitors) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setFormData(emptyForm);
         setEditingId(null);
         setShowForm(true);
+        setShowBulkForm(false);
         setError("");
         setSuccess("");
+        scrollToForm();
+    };
+
+    const openBulkForm = () => {
+        if (!canEditVisitors) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
+        setBulkRows([
+            createEmptyBulkRow(),
+            createEmptyBulkRow(),
+            createEmptyBulkRow(),
+            createEmptyBulkRow(),
+            createEmptyBulkRow()
+        ]);
+
+        setShowBulkForm(true);
+        setShowForm(false);
+        setEditingId(null);
+        setError("");
+        setSuccess("");
+        scrollToForm();
     };
 
     const resetForm = () => {
@@ -136,8 +241,26 @@ const Visitors = () => {
         setError("");
     };
 
+    const resetBulkForm = () => {
+        setBulkRows([
+            createEmptyBulkRow(),
+            createEmptyBulkRow(),
+            createEmptyBulkRow(),
+            createEmptyBulkRow(),
+            createEmptyBulkRow()
+        ]);
+
+        setShowBulkForm(false);
+        setError("");
+    };
+
     const handleSubmit = async (event) => {
         event.preventDefault();
+
+        if (!canEditVisitors) {
+            setError(getNoPermissionMessage());
+            return;
+        }
 
         setSaving(true);
         setError("");
@@ -183,7 +306,83 @@ const Visitors = () => {
         }
     };
 
+    const handleSaveBulkVisitors = async () => {
+        if (!canEditVisitors) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
+        setSavingBulk(true);
+        setError("");
+        setSuccess("");
+
+        const rowsWithData = bulkRows.filter((row) => {
+            return (
+                row.full_name.trim() ||
+                row.phone.trim() ||
+                row.email.trim() ||
+                row.address.trim() ||
+                row.invited_by.trim() ||
+                row.visit_date
+            );
+        });
+
+        if (rowsWithData.length === 0) {
+            setError("Please enter at least one visitor.");
+            setSavingBulk(false);
+            return;
+        }
+
+        const hasInvalidRow = rowsWithData.some((row) => {
+            const { first_name, last_name } = splitFullName(row.full_name);
+            return !first_name || !last_name || !row.visit_date;
+        });
+
+        if (hasInvalidRow) {
+            setError(
+                "Each visitor must have full name with first and last name, plus visit date."
+            );
+            setSavingBulk(false);
+            return;
+        }
+
+        try {
+            for (const row of rowsWithData) {
+                const { first_name, last_name } = splitFullName(row.full_name);
+
+                const payload = {
+                    first_name,
+                    last_name,
+                    phone: row.phone,
+                    email: row.email,
+                    address: row.address,
+                    visit_date: row.visit_date,
+                    invited_by: row.invited_by,
+                    follow_up_status: row.follow_up_status
+                };
+
+                await API.post("/visitors", payload);
+            }
+
+            setSuccess(`${rowsWithData.length} visitor(s) added successfully.`);
+            resetBulkForm();
+            await fetchVisitors();
+        } catch (error) {
+            setError(
+                error.response?.data?.message ||
+                    "Failed to save bulk visitors. Some visitors may have already been saved."
+            );
+        } finally {
+            setSavingBulk(false);
+        }
+    };
+
     const openDeleteModal = (visitor) => {
+        if (!canEditVisitors) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setVisitorToDelete(visitor);
         setError("");
         setSuccess("");
@@ -194,6 +393,11 @@ const Visitors = () => {
     };
 
     const confirmDelete = async () => {
+        if (!canEditVisitors) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         if (!visitorToDelete) {
             return;
         }
@@ -229,6 +433,11 @@ const Visitors = () => {
     };
 
     const handleEdit = (visitor) => {
+        if (!canEditVisitors) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setEditingId(getVisitorId(visitor));
 
         setFormData({
@@ -242,10 +451,10 @@ const Visitors = () => {
         });
 
         setShowForm(true);
+        setShowBulkForm(false);
         setSuccess("");
         setError("");
-
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        scrollToForm();
     };
 
     return (
@@ -254,13 +463,30 @@ const Visitors = () => {
                 <div>
                     <span className="eyebrow">Visitor Management</span>
                     <h1>Visitors</h1>
-                    <p>Register visitors and track follow-up progress.</p>
+                    <p>
+                        Register visitors, bulk add visitors, and track follow-up
+                        progress.
+                    </p>
                 </div>
 
-                <button className="primary-btn" onClick={openAddForm}>
-                    <FaPlus /> Add Visitor
-                </button>
+                {canEditVisitors && (
+                    <div className="toolbar-actions">
+                        <button className="secondary-btn" onClick={openBulkForm}>
+                            <FaUsers /> Add Multiple
+                        </button>
+
+                        <button className="primary-btn" onClick={openAddForm}>
+                            <FaPlus /> Add Visitor
+                        </button>
+                    </div>
+                )}
             </div>
+
+            {!canEditVisitors && (
+                <div className="info-message">
+                    {getNoPermissionMessage()}
+                </div>
+            )}
 
             {error && <div className="page-error">{error}</div>}
             {success && <div className="success-message">{success}</div>}
@@ -304,7 +530,199 @@ const Visitors = () => {
                 </div>
             )}
 
-            {showForm && (
+            {showBulkForm && canEditVisitors && (
+                <div className="form-card">
+                    <div className="section-header">
+                        <div>
+                            <h2>Add Multiple Visitors</h2>
+                            <p>Enter many visitors and save them all at once.</p>
+                        </div>
+
+                        <button className="icon-btn" onClick={resetBulkForm}>
+                            <FaTimes />
+                        </button>
+                    </div>
+
+                    <div className="bulk-member-actions">
+                        <button
+                            type="button"
+                            className="secondary-btn"
+                            onClick={addBulkRow}
+                        >
+                            <FaPlus /> Add Row
+                        </button>
+
+                        <span>{bulkRows.length} row(s)</span>
+                    </div>
+
+                    <div className="table-wrapper bulk-members-wrapper">
+                        <table className="data-table bulk-members-table">
+                            <thead>
+                                <tr>
+                                    <th>Full Name</th>
+                                    <th>Phone</th>
+                                    <th>Email</th>
+                                    <th>Visit Date</th>
+                                    <th>Invited By</th>
+                                    <th>Status</th>
+                                    <th>Address</th>
+                                    <th>Remove</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {bulkRows.map((row, index) => (
+                                    <tr key={index}>
+                                        <td>
+                                            <input
+                                                value={row.full_name}
+                                                onChange={(event) =>
+                                                    handleBulkChange(
+                                                        index,
+                                                        "full_name",
+                                                        event.target.value
+                                                    )
+                                                }
+                                                placeholder="e.g. Mary Phiri"
+                                            />
+                                        </td>
+
+                                        <td>
+                                            <input
+                                                value={row.phone}
+                                                onChange={(event) =>
+                                                    handleBulkChange(
+                                                        index,
+                                                        "phone",
+                                                        event.target.value
+                                                    )
+                                                }
+                                                placeholder="Phone"
+                                            />
+                                        </td>
+
+                                        <td>
+                                            <input
+                                                value={row.email}
+                                                onChange={(event) =>
+                                                    handleBulkChange(
+                                                        index,
+                                                        "email",
+                                                        event.target.value
+                                                    )
+                                                }
+                                                placeholder="Email"
+                                            />
+                                        </td>
+
+                                        <td>
+                                            <input
+                                                type="date"
+                                                value={row.visit_date}
+                                                onChange={(event) =>
+                                                    handleBulkChange(
+                                                        index,
+                                                        "visit_date",
+                                                        event.target.value
+                                                    )
+                                                }
+                                            />
+                                        </td>
+
+                                        <td>
+                                            <input
+                                                value={row.invited_by}
+                                                onChange={(event) =>
+                                                    handleBulkChange(
+                                                        index,
+                                                        "invited_by",
+                                                        event.target.value
+                                                    )
+                                                }
+                                                placeholder="Optional"
+                                            />
+                                        </td>
+
+                                        <td>
+                                            <select
+                                                value={row.follow_up_status}
+                                                onChange={(event) =>
+                                                    handleBulkChange(
+                                                        index,
+                                                        "follow_up_status",
+                                                        event.target.value
+                                                    )
+                                                }
+                                            >
+                                                <option value="New Visitor">
+                                                    New Visitor
+                                                </option>
+                                                <option value="Contacted">
+                                                    Contacted
+                                                </option>
+                                                <option value="Interested">
+                                                    Interested
+                                                </option>
+                                                <option value="Joined">Joined</option>
+                                                <option value="Not Interested">
+                                                    Not Interested
+                                                </option>
+                                            </select>
+                                        </td>
+
+                                        <td>
+                                            <input
+                                                value={row.address}
+                                                onChange={(event) =>
+                                                    handleBulkChange(
+                                                        index,
+                                                        "address",
+                                                        event.target.value
+                                                    )
+                                                }
+                                                placeholder="Address"
+                                            />
+                                        </td>
+
+                                        <td>
+                                            <button
+                                                type="button"
+                                                className="table-delete-btn"
+                                                onClick={() => removeBulkRow(index)}
+                                            >
+                                                <FaTrash />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="form-actions">
+                        <button
+                            type="button"
+                            className="secondary-btn"
+                            onClick={resetBulkForm}
+                            disabled={savingBulk}
+                        >
+                            Cancel
+                        </button>
+
+                        <button
+                            type="button"
+                            className="primary-btn"
+                            onClick={handleSaveBulkVisitors}
+                            disabled={savingBulk}
+                        >
+                            <FaSave />
+                            {savingBulk ? "Saving Visitors..." : "Save All Visitors"}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {showForm && canEditVisitors && (
                 <div className="form-card">
                     <div className="section-header">
                         <div>
@@ -470,7 +888,7 @@ const Visitors = () => {
                                     <th>Visit Date</th>
                                     <th>Invited By</th>
                                     <th>Status</th>
-                                    <th>Actions</th>
+                                    {canEditVisitors && <th>Actions</th>}
                                 </tr>
                             </thead>
 
@@ -501,27 +919,29 @@ const Visitors = () => {
                                             </span>
                                         </td>
 
-                                        <td>
-                                            <div className="table-actions-inline">
-                                                <button
-                                                    className="table-action-btn"
-                                                    onClick={() =>
-                                                        handleEdit(visitor)
-                                                    }
-                                                >
-                                                    <FaEdit /> Edit
-                                                </button>
+                                        {canEditVisitors && (
+                                            <td>
+                                                <div className="table-actions-inline">
+                                                    <button
+                                                        className="table-action-btn"
+                                                        onClick={() =>
+                                                            handleEdit(visitor)
+                                                        }
+                                                    >
+                                                        <FaEdit /> Edit
+                                                    </button>
 
-                                                <button
-                                                    className="table-delete-btn"
-                                                    onClick={() =>
-                                                        openDeleteModal(visitor)
-                                                    }
-                                                >
-                                                    <FaTrash /> Delete
-                                                </button>
-                                            </div>
-                                        </td>
+                                                    <button
+                                                        className="table-delete-btn"
+                                                        onClick={() =>
+                                                            openDeleteModal(visitor)
+                                                        }
+                                                    >
+                                                        <FaTrash /> Delete
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>

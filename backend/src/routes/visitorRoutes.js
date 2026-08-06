@@ -18,6 +18,7 @@ const {
 const router = express.Router();
 
 router.post("/", protect, authorize("admin", "leader"), createVisitor);
+
 router.get("/", protect, getVisitors);
 
 router.post(
@@ -41,7 +42,7 @@ router.put(
 router.delete(
     "/:id",
     protect,
-    authorize("admin"),
+    authorize("admin", "leader"),
     deleteVisitor
 );
 

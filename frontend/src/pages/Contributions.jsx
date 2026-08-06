@@ -6,8 +6,10 @@ import {
     FaEdit,
     FaTimes,
     FaSave,
+    FaTrash,
     FaHandHoldingUsd,
-    FaTrash
+    FaMoneyBillWave,
+    FaChartLine
 } from "react-icons/fa";
 
 import API from "../api/api";
@@ -28,18 +30,32 @@ const Contributions = () => {
     const [formData, setFormData] = useState(emptyForm);
     const [searchTerm, setSearchTerm] = useState("");
     const [editingId, setEditingId] = useState(null);
-    const [showForm, setShowForm] = useState(false);
 
+    const [showForm, setShowForm] = useState(false);
     const [contributionToDelete, setContributionToDelete] = useState(null);
-    const [deleting, setDeleting] = useState(false);
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
 
-    const getContributionId = (item) => {
-        return item.id || item.contribution_id;
+    const scrollToForm = () => {
+        setTimeout(() => {
+            const formCard = document.querySelector(".form-card");
+
+            if (formCard) {
+                formCard.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start"
+                });
+            }
+        }, 100);
+    };
+
+    const getContributionId = (contribution) => {
+        return contribution.id || contribution.contribution_id;
     };
 
     const getMemberId = (member) => {
@@ -47,27 +63,29 @@ const Contributions = () => {
     };
 
     const getMemberName = (member) => {
-        return `${member.first_name || ""} ${member.last_name || ""}`.trim();
-    };
-
-    const getContributionCategory = (item) => {
         return (
-            item.contribution_category ||
-            item.contribution_type ||
-            item.category ||
-            ""
+            member.member_name ||
+            member.full_name ||
+            `${member.first_name || ""} ${member.last_name || ""}`.trim() ||
+            "Member"
         );
     };
 
-    const getContributionDate = (item) => {
-        return item.contribution_date || item.date || item.created_at || "";
+    const getContributionMemberName = (contribution) => {
+        return (
+            contribution.member_name ||
+            contribution.full_name ||
+            `${contribution.first_name || ""} ${contribution.last_name || ""}`.trim() ||
+            "General Church Offering / Anonymous"
+        );
     };
 
-    const getContributionMemberName = (item) => {
+    const getContributionCategory = (contribution) => {
         return (
-            item.member_name ||
-            `${item.first_name || ""} ${item.last_name || ""}`.trim() ||
-            "General"
+            contribution.contribution_category ||
+            contribution.contribution_type ||
+            contribution.category ||
+            "Tithe"
         );
     };
 
@@ -76,35 +94,49 @@ const Contributions = () => {
         return String(dateValue).split("T")[0];
     };
 
+    const formatMoney = (amount) => {
+        const value = Number(amount || 0);
+
+        return `K ${value.toLocaleString("en-ZM", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        })}`;
+    };
+
     const fetchData = async () => {
         setLoading(true);
         setError("");
 
         try {
-            const [contributionsResponse, membersResponse] = await Promise.all([
-                API.get("/contributions"),
-                API.get("/members")
-            ]);
+            const [contributionsResponse, membersResponse] =
+                await Promise.allSettled([
+                    API.get("/contributions"),
+                    API.get("/members")
+                ]);
 
-            const contributionList =
-                contributionsResponse.data.contributions ||
-                contributionsResponse.data.data ||
-                contributionsResponse.data;
+            if (contributionsResponse.status === "fulfilled") {
+                const contributionList =
+                    contributionsResponse.value.data.contributions ||
+                    contributionsResponse.value.data.data ||
+                    contributionsResponse.value.data;
 
-            const memberList =
-                membersResponse.data.members ||
-                membersResponse.data.data ||
-                membersResponse.data;
+                setContributions(
+                    Array.isArray(contributionList) ? contributionList : []
+                );
+            }
 
-            setContributions(
-                Array.isArray(contributionList) ? contributionList : []
-            );
+            if (membersResponse.status === "fulfilled") {
+                const memberList =
+                    membersResponse.value.data.members ||
+                    membersResponse.value.data.data ||
+                    membersResponse.value.data;
 
-            setMembers(Array.isArray(memberList) ? memberList : []);
+                setMembers(Array.isArray(memberList) ? memberList : []);
+            }
         } catch (error) {
             setError(
                 error.response?.data?.message ||
-                    "Failed to load contributions. Please check if the backend is running."
+                    "Failed to load tithes and offerings. Please check if the backend is running."
             );
         } finally {
             setLoading(false);
@@ -116,21 +148,35 @@ const Contributions = () => {
     }, []);
 
     const filteredContributions = useMemo(() => {
-        return contributions.filter((item) => {
+        return contributions.filter((contribution) => {
             const searchableText = `
-                ${getContributionMemberName(item)}
-                ${getContributionCategory(item)}
-                ${item.payment_method || ""}
-                ${item.amount || ""}
+                ${getContributionMemberName(contribution)}
+                ${getContributionCategory(contribution)}
+                ${contribution.amount || ""}
+                ${contribution.payment_method || ""}
+                ${contribution.notes || ""}
+                ${contribution.contribution_date || ""}
             `.toLowerCase();
 
             return searchableText.includes(searchTerm.toLowerCase());
         });
     }, [contributions, searchTerm]);
 
-    const totalAmount = filteredContributions.reduce((total, item) => {
-        return total + Number(item.amount || 0);
+    const totalAmount = contributions.reduce((total, contribution) => {
+        return total + Number(contribution.amount || 0);
     }, 0);
+
+    const titheAmount = contributions
+        .filter((contribution) => getContributionCategory(contribution) === "Tithe")
+        .reduce((total, contribution) => total + Number(contribution.amount || 0), 0);
+
+    const offeringAmount = contributions
+        .filter((contribution) =>
+            ["Offering", "Special Offering"].includes(
+                getContributionCategory(contribution)
+            )
+        )
+        .reduce((total, contribution) => total + Number(contribution.amount || 0), 0);
 
     const handleChange = (event) => {
         const { name, value } = event.target;
@@ -147,6 +193,7 @@ const Contributions = () => {
         setShowForm(true);
         setError("");
         setSuccess("");
+        scrollToForm();
     };
 
     const resetForm = () => {
@@ -168,9 +215,13 @@ const Contributions = () => {
             !formData.amount ||
             !formData.contribution_date
         ) {
-            setError(
-                "Contribution category, amount, and contribution date are required."
-            );
+            setError("Category, amount, and date are required.");
+            setSaving(false);
+            return;
+        }
+
+        if (Number(formData.amount) <= 0) {
+            setError("Amount must be greater than 0.");
             setSaving(false);
             return;
         }
@@ -178,11 +229,9 @@ const Contributions = () => {
         try {
             const payload = {
                 member_id: formData.member_id || null,
-
                 contribution_category: formData.contribution_category,
                 contribution_type: formData.contribution_category,
                 category: formData.contribution_category,
-
                 amount: Number(formData.amount),
                 contribution_date: formData.contribution_date,
                 payment_method: formData.payment_method,
@@ -191,10 +240,10 @@ const Contributions = () => {
 
             if (editingId) {
                 await API.put(`/contributions/${editingId}`, payload);
-                setSuccess("Contribution updated successfully.");
+                setSuccess("Tithe / offering record updated successfully.");
             } else {
                 await API.post("/contributions", payload);
-                setSuccess("Contribution recorded successfully.");
+                setSuccess("Tithe / offering recorded successfully.");
             }
 
             resetForm();
@@ -202,15 +251,33 @@ const Contributions = () => {
         } catch (error) {
             setError(
                 error.response?.data?.message ||
-                    "Failed to save contribution. Please try again."
+                    "Failed to save tithe / offering record. Please try again."
             );
         } finally {
             setSaving(false);
         }
     };
 
-    const openDeleteModal = (item) => {
-        setContributionToDelete(item);
+    const handleEdit = (contribution) => {
+        setEditingId(getContributionId(contribution));
+
+        setFormData({
+            member_id: contribution.member_id || "",
+            contribution_category: getContributionCategory(contribution),
+            amount: contribution.amount || "",
+            contribution_date: formatDate(contribution.contribution_date),
+            payment_method: contribution.payment_method || "Cash",
+            notes: contribution.notes || ""
+        });
+
+        setShowForm(true);
+        setError("");
+        setSuccess("");
+        scrollToForm();
+    };
+
+    const openDeleteModal = (contribution) => {
+        setContributionToDelete(contribution);
         setError("");
         setSuccess("");
     };
@@ -220,63 +287,51 @@ const Contributions = () => {
     };
 
     const confirmDelete = async () => {
-        if (!contributionToDelete) {
-            return;
-        }
+        if (!contributionToDelete) return;
+
+        const contributionId = getContributionId(contributionToDelete);
 
         setDeleting(true);
         setError("");
         setSuccess("");
 
         try {
-            await API.delete(
-                `/contributions/${getContributionId(contributionToDelete)}`
+            await API.delete(`/contributions/${contributionId}`);
+
+            setContributions((previousContributions) =>
+                previousContributions.filter(
+                    (contribution) =>
+                        String(getContributionId(contribution)) !==
+                        String(contributionId)
+                )
             );
-            setSuccess("Contribution deleted successfully.");
+
+            setSuccess("Tithe / offering record deleted successfully.");
             setContributionToDelete(null);
-            await fetchData();
         } catch (error) {
             setError(
                 error.response?.data?.message ||
-                    "Failed to delete contribution. Please try again."
+                    "Failed to delete tithe / offering record. Please try again."
             );
         } finally {
             setDeleting(false);
         }
     };
 
-    const handleEdit = (item) => {
-        setEditingId(getContributionId(item));
-
-        setFormData({
-            member_id: item.member_id || "",
-            contribution_category: getContributionCategory(item) || "Tithe",
-            amount: item.amount || "",
-            contribution_date: formatDate(getContributionDate(item)),
-            payment_method: item.payment_method || "Cash",
-            notes: item.notes || ""
-        });
-
-        setShowForm(true);
-        setSuccess("");
-        setError("");
-
-        window.scrollTo({ top: 0, behavior: "smooth" });
-    };
-
     return (
         <div className="page page-fade">
             <div className="page-header page-header-row">
                 <div>
-                    <span className="eyebrow">Finance Management</span>
-                    <h1>Contributions</h1>
+                    <span className="eyebrow">Church Finance</span>
+                    <h1>Tithes & Offerings</h1>
                     <p>
-                        Record tithes, offerings, donations, and monthly summaries.
+                        Record tithes, offerings, donations, and special church
+                        contributions.
                     </p>
                 </div>
 
                 <button className="primary-btn" onClick={openAddForm}>
-                    <FaPlus /> Record Contribution
+                    <FaPlus /> Add Record
                 </button>
             </div>
 
@@ -290,21 +345,13 @@ const Contributions = () => {
                             <FaTrash />
                         </div>
 
-                        <h2>Delete Contribution?</h2>
+                        <h2>Delete Record?</h2>
 
                         <p>
                             Are you sure you want to delete this{" "}
-                            <strong>
-                                {getContributionCategory(contributionToDelete)}
-                            </strong>{" "}
+                            <strong>{getContributionCategory(contributionToDelete)}</strong>{" "}
                             record of{" "}
-                            <strong>
-                                K
-                                {Number(
-                                    contributionToDelete.amount || 0
-                                ).toFixed(2)}
-                            </strong>
-                            ?
+                            <strong>{formatMoney(contributionToDelete.amount)}</strong>?
                         </p>
 
                         <p className="delete-warning">
@@ -337,16 +384,32 @@ const Contributions = () => {
                     <div className="stat-icon">
                         <FaHandHoldingUsd />
                     </div>
-                    <h3>Displayed Total</h3>
-                    <p>K{totalAmount.toFixed(2)}</p>
+                    <h3>Total Records</h3>
+                    <p>{contributions.length}</p>
+                </div>
+
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaMoneyBillWave />
+                    </div>
+                    <h3>Total Amount</h3>
+                    <p>{formatMoney(totalAmount)}</p>
+                </div>
+
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaChartLine />
+                    </div>
+                    <h3>Total Tithe</h3>
+                    <p>{formatMoney(titheAmount)}</p>
                 </div>
 
                 <div className="stat-card">
                     <div className="stat-icon">
                         <FaHandHoldingUsd />
                     </div>
-                    <h3>Records</h3>
-                    <p>{filteredContributions.length}</p>
+                    <h3>Total Offerings</h3>
+                    <p>{formatMoney(offeringAmount)}</p>
                 </div>
             </div>
 
@@ -356,10 +419,10 @@ const Contributions = () => {
                         <div>
                             <h2>
                                 {editingId
-                                    ? "Edit Contribution"
-                                    : "Record Contribution"}
+                                    ? "Edit Tithe / Offering Record"
+                                    : "Add Tithe / Offering Record"}
                             </h2>
-                            <p>Enter contribution details below.</p>
+                            <p>Enter the financial record details below.</p>
                         </div>
 
                         <button className="icon-btn" onClick={resetForm}>
@@ -370,13 +433,15 @@ const Contributions = () => {
                     <form onSubmit={handleSubmit}>
                         <div className="form-grid">
                             <div>
-                                <label>Member</label>
+                                <label>Member / Source</label>
                                 <select
                                     name="member_id"
                                     value={formData.member_id}
                                     onChange={handleChange}
                                 >
-                                    <option value="">Anonymous / General</option>
+                                    <option value="">
+                                        General Church Offering / Anonymous
+                                    </option>
 
                                     {members.map((member) => (
                                         <option
@@ -390,7 +455,7 @@ const Contributions = () => {
                             </div>
 
                             <div>
-                                <label>Contribution Category</label>
+                                <label>Category</label>
                                 <select
                                     name="contribution_category"
                                     value={formData.contribution_category}
@@ -398,8 +463,17 @@ const Contributions = () => {
                                 >
                                     <option value="Tithe">Tithe</option>
                                     <option value="Offering">Offering</option>
+                                    <option value="Special Offering">
+                                        Special Offering
+                                    </option>
                                     <option value="Donation">Donation</option>
-                                    <option value="Project">Project</option>
+                                    <option value="Building Fund">
+                                        Building Fund
+                                    </option>
+                                    <option value="Welfare">Welfare</option>
+                                    <option value="Camp Meeting">
+                                        Camp Meeting
+                                    </option>
                                     <option value="Other">Other</option>
                                 </select>
                             </div>
@@ -413,12 +487,12 @@ const Contributions = () => {
                                     step="0.01"
                                     value={formData.amount}
                                     onChange={handleChange}
-                                    placeholder="e.g. 500"
+                                    placeholder="e.g. 250"
                                 />
                             </div>
 
                             <div>
-                                <label>Contribution Date</label>
+                                <label>Date</label>
                                 <input
                                     name="contribution_date"
                                     type="date"
@@ -438,6 +512,7 @@ const Contributions = () => {
                                     <option value="Mobile Money">Mobile Money</option>
                                     <option value="Bank Transfer">Bank Transfer</option>
                                     <option value="Cheque">Cheque</option>
+                                    <option value="Other">Other</option>
                                 </select>
                             </div>
 
@@ -471,8 +546,8 @@ const Contributions = () => {
                                 {saving
                                     ? "Saving..."
                                     : editingId
-                                    ? "Update Contribution"
-                                    : "Save Contribution"}
+                                    ? "Update Record"
+                                    : "Save Record"}
                             </button>
                         </div>
                     </form>
@@ -482,8 +557,8 @@ const Contributions = () => {
             <div className="table-card">
                 <div className="table-toolbar">
                     <div>
-                        <h2>Contribution Records</h2>
-                        <p>{filteredContributions.length} contribution(s) found</p>
+                        <h2>Tithes & Offerings Records</h2>
+                        <p>{filteredContributions.length} record(s) found</p>
                     </div>
 
                     <div className="toolbar-actions">
@@ -494,7 +569,7 @@ const Contributions = () => {
                                 onChange={(event) =>
                                     setSearchTerm(event.target.value)
                                 }
-                                placeholder="Search contributions..."
+                                placeholder="Search records..."
                             />
                         </div>
 
@@ -505,54 +580,65 @@ const Contributions = () => {
                 </div>
 
                 {loading ? (
-                    <div className="loading-box">Loading contributions...</div>
+                    <div className="loading-box">
+                        Loading tithes and offerings...
+                    </div>
                 ) : filteredContributions.length === 0 ? (
                     <div className="empty-state">
                         <FaHandHoldingUsd />
-                        <h3>No contributions found</h3>
-                        <p>Record a contribution to get started.</p>
+                        <h3>No tithes or offerings found</h3>
+                        <p>Add a financial record to get started.</p>
                     </div>
                 ) : (
                     <div className="table-wrapper">
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>Member</th>
+                                    <th>Member / Source</th>
                                     <th>Category</th>
                                     <th>Amount</th>
                                     <th>Date</th>
-                                    <th>Method</th>
+                                    <th>Payment</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
 
                             <tbody>
-                                {filteredContributions.map((item) => (
-                                    <tr key={getContributionId(item)}>
+                                {filteredContributions.map((contribution) => (
+                                    <tr key={getContributionId(contribution)}>
                                         <td>
                                             <strong>
-                                                {getContributionMemberName(item)}
+                                                {getContributionMemberName(contribution)}
                                             </strong>
                                         </td>
 
-                                        <td>{getContributionCategory(item) || "-"}</td>
-
                                         <td>
-                                            K{Number(item.amount || 0).toFixed(2)}
+                                            <span className="status-badge">
+                                                {getContributionCategory(contribution)}
+                                            </span>
                                         </td>
 
                                         <td>
-                                            {formatDate(getContributionDate(item)) ||
-                                                "-"}
+                                            <strong>
+                                                {formatMoney(contribution.amount)}
+                                            </strong>
                                         </td>
 
-                                        <td>{item.payment_method || "-"}</td>
+                                        <td>
+                                            {formatDate(
+                                                contribution.contribution_date
+                                            ) || "-"}
+                                        </td>
+
+                                        <td>{contribution.payment_method || "-"}</td>
 
                                         <td>
                                             <div className="table-actions-inline">
                                                 <button
                                                     className="table-action-btn"
-                                                    onClick={() => handleEdit(item)}
+                                                    onClick={() =>
+                                                        handleEdit(contribution)
+                                                    }
                                                 >
                                                     <FaEdit /> Edit
                                                 </button>
@@ -560,7 +646,7 @@ const Contributions = () => {
                                                 <button
                                                     className="table-delete-btn"
                                                     onClick={() =>
-                                                        openDeleteModal(item)
+                                                        openDeleteModal(contribution)
                                                     }
                                                 >
                                                     <FaTrash /> Delete

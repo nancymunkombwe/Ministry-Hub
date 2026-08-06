@@ -3,51 +3,113 @@ import {
     FaPlus,
     FaSearch,
     FaSyncAlt,
-    FaClipboardCheck,
     FaTimes,
     FaSave,
+    FaClipboardCheck,
+    FaEye,
+    FaUserCheck,
+    FaUserTimes,
+    FaExclamationTriangle,
     FaUsers
 } from "react-icons/fa";
 
 import API from "../api/api";
+import { useAuth } from "../context/AuthContext";
+import {
+    canManageAttendance,
+    getNoPermissionMessage
+} from "../utils/permissions";
 
 const emptySessionForm = {
-    session_name: "",
     session_date: "",
     session_type: "Sabbath Service",
     department_id: "",
     notes: ""
 };
 
-const emptyRecordForm = {
-    session_id: "",
-    member_id: "",
-    status: "Present",
-    remarks: ""
-};
-
 const Attendance = () => {
+    const { user } = useAuth();
+
+    const role = user?.role || "admin";
+    const canEditAttendance = canManageAttendance(role);
+
     const [sessions, setSessions] = useState([]);
     const [members, setMembers] = useState([]);
+    const [departments, setDepartments] = useState([]);
+    const [records, setRecords] = useState([]);
     const [missingMembers, setMissingMembers] = useState([]);
 
     const [sessionForm, setSessionForm] = useState(emptySessionForm);
-    const [recordForm, setRecordForm] = useState(emptyRecordForm);
+    const [selectedSession, setSelectedSession] = useState(null);
 
+    const [bulkAttendance, setBulkAttendance] = useState([]);
     const [searchTerm, setSearchTerm] = useState("");
+    const [memberSearchTerm, setMemberSearchTerm] = useState("");
+
     const [showSessionForm, setShowSessionForm] = useState(false);
-    const [showRecordForm, setShowRecordForm] = useState(false);
+    const [showBulkForm, setShowBulkForm] = useState(false);
 
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
+    const [recordsLoading, setRecordsLoading] = useState(false);
+    const [savingSession, setSavingSession] = useState(false);
+    const [savingBulk, setSavingBulk] = useState(false);
+
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
 
-    const getSessionId = (session) => session.id || session.session_id;
-    const getMemberId = (member) => member.id || member.member_id;
+    const scrollToForm = () => {
+        setTimeout(() => {
+            const formCard = document.querySelector(".form-card");
+
+            if (formCard) {
+                formCard.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start"
+                });
+            }
+        }, 100);
+    };
+
+    const getSessionId = (session) => {
+        return session.id || session.session_id || session.attendance_session_id;
+    };
+
+    const getMemberId = (member) => {
+        return member.id || member.member_id;
+    };
+
+    const getDepartmentId = (department) => {
+        return department.id || department.department_id;
+    };
+
+    const getDepartmentName = (department) => {
+        return department.department_name || department.name || "Department";
+    };
+
+    const getRecordId = (record) => {
+        return record.id || record.record_id || record.attendance_record_id;
+    };
+
+    const getMemberName = (member) => {
+        return (
+            member.member_name ||
+            member.full_name ||
+            `${member.first_name || ""} ${member.last_name || ""}`.trim() ||
+            "Member"
+        );
+    };
+
+    const getRecordMemberName = (record) => {
+        return (
+            record.member_name ||
+            record.full_name ||
+            `${record.first_name || ""} ${record.last_name || ""}`.trim() ||
+            "Member"
+        );
+    };
 
     const formatDate = (dateValue) => {
-        if (!dateValue) return "-";
+        if (!dateValue) return "";
         return String(dateValue).split("T")[0];
     };
 
@@ -56,32 +118,55 @@ const Attendance = () => {
         setError("");
 
         try {
-            const [sessionsResponse, membersResponse, missingResponse] =
-                await Promise.all([
-                    API.get("/attendance/sessions"),
-                    API.get("/members"),
-                    API.get("/attendance/missing-members")
-                ]);
+            const [
+                sessionsResponse,
+                membersResponse,
+                departmentsResponse,
+                missingResponse
+            ] = await Promise.allSettled([
+                API.get("/attendance/sessions"),
+                API.get("/members"),
+                API.get("/departments"),
+                API.get("/attendance/missing-members")
+            ]);
 
-            const sessionList =
-                sessionsResponse.data.sessions ||
-                sessionsResponse.data.data ||
-                sessionsResponse.data;
+            if (sessionsResponse.status === "fulfilled") {
+                const sessionList =
+                    sessionsResponse.value.data.sessions ||
+                    sessionsResponse.value.data.attendance_sessions ||
+                    sessionsResponse.value.data.data ||
+                    sessionsResponse.value.data;
 
-            const memberList =
-                membersResponse.data.members ||
-                membersResponse.data.data ||
-                membersResponse.data;
+                setSessions(Array.isArray(sessionList) ? sessionList : []);
+            }
 
-            const missingList =
-                missingResponse.data.missing_members ||
-                missingResponse.data.members ||
-                missingResponse.data.data ||
-                missingResponse.data;
+            if (membersResponse.status === "fulfilled") {
+                const memberList =
+                    membersResponse.value.data.members ||
+                    membersResponse.value.data.data ||
+                    membersResponse.value.data;
 
-            setSessions(Array.isArray(sessionList) ? sessionList : []);
-            setMembers(Array.isArray(memberList) ? memberList : []);
-            setMissingMembers(Array.isArray(missingList) ? missingList : []);
+                setMembers(Array.isArray(memberList) ? memberList : []);
+            }
+
+            if (departmentsResponse.status === "fulfilled") {
+                const departmentList =
+                    departmentsResponse.value.data.departments ||
+                    departmentsResponse.value.data.data ||
+                    departmentsResponse.value.data;
+
+                setDepartments(Array.isArray(departmentList) ? departmentList : []);
+            }
+
+            if (missingResponse.status === "fulfilled") {
+                const missingList =
+                    missingResponse.value.data.missing_members ||
+                    missingResponse.value.data.members ||
+                    missingResponse.value.data.data ||
+                    missingResponse.value.data;
+
+                setMissingMembers(Array.isArray(missingList) ? missingList : []);
+            }
         } catch (error) {
             setError(
                 error.response?.data?.message ||
@@ -92,6 +177,42 @@ const Attendance = () => {
         }
     };
 
+    const fetchSessionRecords = async (session) => {
+        const sessionId = getSessionId(session);
+
+        if (!sessionId) {
+            setError("Invalid session selected.");
+            return;
+        }
+
+        setSelectedSession(session);
+        setRecordsLoading(true);
+        setError("");
+        setSuccess("");
+
+        try {
+            const response = await API.get(
+                `/attendance/sessions/${sessionId}/records`
+            );
+
+            const recordList =
+                response.data.records ||
+                response.data.attendance_records ||
+                response.data.data ||
+                response.data;
+
+            setRecords(Array.isArray(recordList) ? recordList : []);
+        } catch (error) {
+            setRecords([]);
+            setError(
+                error.response?.data?.message ||
+                    "Failed to load session records."
+            );
+        } finally {
+            setRecordsLoading(false);
+        }
+    };
+
     useEffect(() => {
         fetchData();
     }, []);
@@ -99,15 +220,44 @@ const Attendance = () => {
     const filteredSessions = useMemo(() => {
         return sessions.filter((session) => {
             const searchableText = `
-                ${session.session_name || ""}
                 ${session.session_type || ""}
-                ${session.session_date || ""}
+                ${session.type || ""}
+                ${session.department_name || ""}
                 ${session.notes || ""}
+                ${session.session_date || ""}
             `.toLowerCase();
 
             return searchableText.includes(searchTerm.toLowerCase());
         });
     }, [sessions, searchTerm]);
+
+    const filteredBulkMembers = useMemo(() => {
+        return bulkAttendance.filter((item) => {
+            const searchableText = `
+                ${item.member_name || ""}
+                ${item.status || ""}
+                ${item.remarks || ""}
+            `.toLowerCase();
+
+            return searchableText.includes(memberSearchTerm.toLowerCase());
+        });
+    }, [bulkAttendance, memberSearchTerm]);
+
+    const presentCount = records.filter(
+        (record) => (record.status || "").toLowerCase() === "present"
+    ).length;
+
+    const absentCount = records.filter(
+        (record) => (record.status || "").toLowerCase() === "absent"
+    ).length;
+
+    const bulkPresentCount = bulkAttendance.filter(
+        (item) => item.status === "Present"
+    ).length;
+
+    const bulkAbsentCount = bulkAttendance.filter(
+        (item) => item.status === "Absent"
+    ).length;
 
     const handleSessionChange = (event) => {
         const { name, value } = event.target;
@@ -118,43 +268,147 @@ const Attendance = () => {
         }));
     };
 
-    const handleRecordChange = (event) => {
-        const { name, value } = event.target;
-
-        setRecordForm((previousData) => ({
-            ...previousData,
-            [name]: value
-        }));
+    const resetSessionForm = () => {
+        setSessionForm(emptySessionForm);
+        setShowSessionForm(false);
+        setError("");
     };
 
-    const resetForms = () => {
+    const openSessionForm = () => {
+        if (!canEditAttendance) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setSessionForm(emptySessionForm);
-        setRecordForm(emptyRecordForm);
-        setShowSessionForm(false);
-        setShowRecordForm(false);
+        setShowSessionForm(true);
+        setShowBulkForm(false);
         setError("");
+        setSuccess("");
+        scrollToForm();
+    };
+
+    const prepareBulkAttendance = async (session) => {
+        if (!canEditAttendance) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
+        const sessionId = getSessionId(session);
+
+        if (!sessionId) {
+            setError("Invalid session selected.");
+            return;
+        }
+
+        setSelectedSession(session);
+        setShowBulkForm(true);
+        setShowSessionForm(false);
+        setMemberSearchTerm("");
+        setError("");
+        setSuccess("");
+        scrollToForm();
+
+        let existingRecords = [];
+
+        try {
+            const response = await API.get(
+                `/attendance/sessions/${sessionId}/records`
+            );
+
+            const recordList =
+                response.data.records ||
+                response.data.attendance_records ||
+                response.data.data ||
+                response.data;
+
+            existingRecords = Array.isArray(recordList) ? recordList : [];
+            setRecords(existingRecords);
+        } catch {
+            existingRecords = [];
+            setRecords([]);
+        }
+
+        const preparedList = members.map((member) => {
+            const memberId = getMemberId(member);
+
+            const existingRecord = existingRecords.find(
+                (record) =>
+                    String(record.member_id) === String(memberId) ||
+                    String(record.memberId) === String(memberId)
+            );
+
+            return {
+                member_id: memberId,
+                member_name: getMemberName(member),
+                status: existingRecord?.status || "Present",
+                remarks: existingRecord?.remarks || existingRecord?.notes || ""
+            };
+        });
+
+        setBulkAttendance(preparedList);
+    };
+
+    const updateBulkStatus = (memberId, status) => {
+        setBulkAttendance((previousList) =>
+            previousList.map((item) =>
+                String(item.member_id) === String(memberId)
+                    ? { ...item, status }
+                    : item
+            )
+        );
+    };
+
+    const updateBulkRemarks = (memberId, remarks) => {
+        setBulkAttendance((previousList) =>
+            previousList.map((item) =>
+                String(item.member_id) === String(memberId)
+                    ? { ...item, remarks }
+                    : item
+            )
+        );
+    };
+
+    const markAll = (status) => {
+        setBulkAttendance((previousList) =>
+            previousList.map((item) => ({
+                ...item,
+                status
+            }))
+        );
     };
 
     const handleCreateSession = async (event) => {
         event.preventDefault();
-        setSaving(true);
+
+        if (!canEditAttendance) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
+        setSavingSession(true);
         setError("");
         setSuccess("");
 
-        if (!sessionForm.session_name.trim() || !sessionForm.session_date) {
-            setError("Session name and session date are required.");
-            setSaving(false);
+        if (!sessionForm.session_date || !sessionForm.session_type) {
+            setError("Session date and session type are required.");
+            setSavingSession(false);
             return;
         }
 
         try {
-            await API.post("/attendance/sessions", {
-                ...sessionForm,
-                department_id: sessionForm.department_id || null
-            });
+            const payload = {
+                session_date: sessionForm.session_date,
+                session_type: sessionForm.session_type,
+                type: sessionForm.session_type,
+                department_id: sessionForm.department_id || null,
+                notes: sessionForm.notes
+            };
+
+            await API.post("/attendance/sessions", payload);
 
             setSuccess("Attendance session created successfully.");
-            resetForms();
+            resetSessionForm();
             await fetchData();
         } catch (error) {
             setError(
@@ -162,37 +416,58 @@ const Attendance = () => {
                     "Failed to create attendance session."
             );
         } finally {
-            setSaving(false);
+            setSavingSession(false);
         }
     };
 
-    const handleMarkAttendance = async (event) => {
-        event.preventDefault();
-        setSaving(true);
-        setError("");
-        setSuccess("");
-
-        if (!recordForm.session_id || !recordForm.member_id) {
-            setError("Please select a session and a member.");
-            setSaving(false);
+    const handleSaveBulkAttendance = async () => {
+        if (!canEditAttendance) {
+            setError(getNoPermissionMessage());
             return;
         }
 
-        try {
-            await API.post("/attendance/records", {
-                ...recordForm,
-                attendance_session_id: recordForm.session_id
-            });
+        if (!selectedSession) {
+            setError("Please select a session first.");
+            return;
+        }
 
-            setSuccess("Attendance marked successfully.");
-            resetForms();
+        if (bulkAttendance.length === 0) {
+            setError("No members found to mark attendance.");
+            return;
+        }
+
+        const selectedSessionId = getSessionId(selectedSession);
+
+        setSavingBulk(true);
+        setError("");
+        setSuccess("");
+
+        try {
+            for (const item of bulkAttendance) {
+                const payload = {
+                    session_id: selectedSessionId,
+                    attendance_session_id: selectedSessionId,
+                    member_id: item.member_id,
+                    status: item.status,
+                    remarks: item.remarks,
+                    notes: item.remarks
+                };
+
+                await API.post("/attendance/records", payload);
+            }
+
+            setSuccess("Bulk attendance saved successfully.");
+            setShowBulkForm(false);
+
+            await fetchSessionRecords(selectedSession);
             await fetchData();
         } catch (error) {
             setError(
-                error.response?.data?.message || "Failed to mark attendance."
+                error.response?.data?.message ||
+                    "Failed to save bulk attendance. Some records may already exist for this session."
             );
         } finally {
-            setSaving(false);
+            setSavingBulk(false);
         }
     };
 
@@ -202,54 +477,74 @@ const Attendance = () => {
                 <div>
                     <span className="eyebrow">Attendance Tracking</span>
                     <h1>Attendance</h1>
-                    <p>Create attendance sessions and mark member attendance.</p>
+                    <p>Create attendance sessions and mark all members at once.</p>
                 </div>
 
-                <div className="toolbar-actions">
-                    <button
-                        className="secondary-btn"
-                        onClick={() => setShowRecordForm(true)}
-                    >
-                        <FaClipboardCheck /> Mark Attendance
-                    </button>
-
-                    <button
-                        className="primary-btn"
-                        onClick={() => setShowSessionForm(true)}
-                    >
+                {canEditAttendance && (
+                    <button className="primary-btn" onClick={openSessionForm}>
                         <FaPlus /> New Session
                     </button>
-                </div>
+                )}
             </div>
+
+            {!canEditAttendance && (
+                <div className="info-message">
+                    {getNoPermissionMessage()}
+                </div>
+            )}
 
             {error && <div className="page-error">{error}</div>}
             {success && <div className="success-message">{success}</div>}
 
-            {showSessionForm && (
+            <div className="dashboard-grid">
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaClipboardCheck />
+                    </div>
+                    <h3>Total Sessions</h3>
+                    <p>{sessions.length}</p>
+                </div>
+
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaUserCheck />
+                    </div>
+                    <h3>Present In Selected Session</h3>
+                    <p>{presentCount}</p>
+                </div>
+
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaUserTimes />
+                    </div>
+                    <h3>Absent In Selected Session</h3>
+                    <p>{absentCount}</p>
+                </div>
+
+                <div className="stat-card warning">
+                    <div className="stat-icon">
+                        <FaExclamationTriangle />
+                    </div>
+                    <h3>Missing Members Alert</h3>
+                    <p>{missingMembers.length}</p>
+                </div>
+            </div>
+
+            {showSessionForm && canEditAttendance && (
                 <div className="form-card">
                     <div className="section-header">
                         <div>
                             <h2>Create Attendance Session</h2>
-                            <p>Create a Sabbath service or department attendance session.</p>
+                            <p>Start a new attendance register.</p>
                         </div>
 
-                        <button className="icon-btn" onClick={resetForms}>
+                        <button className="icon-btn" onClick={resetSessionForm}>
                             <FaTimes />
                         </button>
                     </div>
 
                     <form onSubmit={handleCreateSession}>
                         <div className="form-grid">
-                            <div>
-                                <label>Session Name</label>
-                                <input
-                                    name="session_name"
-                                    value={sessionForm.session_name}
-                                    onChange={handleSessionChange}
-                                    placeholder="e.g. Sabbath Divine Service"
-                                />
-                            </div>
-
                             <div>
                                 <label>Session Date</label>
                                 <input
@@ -267,21 +562,43 @@ const Attendance = () => {
                                     value={sessionForm.session_type}
                                     onChange={handleSessionChange}
                                 >
-                                    <option value="Sabbath Service">Sabbath Service</option>
-                                    <option value="Department Meeting">Department Meeting</option>
-                                    <option value="Prayer Meeting">Prayer Meeting</option>
-                                    <option value="Special Program">Special Program</option>
+                                    <option value="Sabbath Service">
+                                        Sabbath Service
+                                    </option>
+                                    <option value="Sabbath School">
+                                        Sabbath School
+                                    </option>
+                                    <option value="Prayer Meeting">
+                                        Prayer Meeting
+                                    </option>
+                                    <option value="Youth Meeting">
+                                        Youth Meeting
+                                    </option>
+                                    <option value="Department Meeting">
+                                        Department Meeting
+                                    </option>
+                                    <option value="Other">Other</option>
                                 </select>
                             </div>
 
                             <div>
-                                <label>Department ID</label>
-                                <input
+                                <label>Department</label>
+                                <select
                                     name="department_id"
                                     value={sessionForm.department_id}
                                     onChange={handleSessionChange}
-                                    placeholder="Optional"
-                                />
+                                >
+                                    <option value="">General Church Session</option>
+
+                                    {departments.map((department) => (
+                                        <option
+                                            key={getDepartmentId(department)}
+                                            value={getDepartmentId(department)}
+                                        >
+                                            {getDepartmentName(department)}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
 
                             <div className="full-width">
@@ -297,121 +614,198 @@ const Attendance = () => {
                         </div>
 
                         <div className="form-actions">
-                            <button type="button" className="secondary-btn" onClick={resetForms}>
+                            <button
+                                type="button"
+                                className="secondary-btn"
+                                onClick={resetSessionForm}
+                            >
                                 Cancel
                             </button>
 
-                            <button type="submit" className="primary-btn" disabled={saving}>
-                                <FaSave /> {saving ? "Saving..." : "Save Session"}
+                            <button
+                                type="submit"
+                                className="primary-btn"
+                                disabled={savingSession}
+                            >
+                                <FaSave />
+                                {savingSession ? "Saving..." : "Save Session"}
                             </button>
                         </div>
                     </form>
                 </div>
             )}
 
-            {showRecordForm && (
+            {showBulkForm && selectedSession && canEditAttendance && (
                 <div className="form-card">
                     <div className="section-header">
                         <div>
-                            <h2>Mark Attendance</h2>
-                            <p>Select a session and mark a member as present or absent.</p>
+                            <h2>
+                                <FaUsers /> Bulk Attendance
+                            </h2>
+                            <p>
+                                Session:{" "}
+                                <strong>
+                                    {selectedSession.session_type ||
+                                        selectedSession.type ||
+                                        "Attendance Session"}
+                                </strong>{" "}
+                                on {formatDate(selectedSession.session_date)}
+                            </p>
                         </div>
 
-                        <button className="icon-btn" onClick={resetForms}>
+                        <button
+                            className="icon-btn"
+                            onClick={() => setShowBulkForm(false)}
+                        >
                             <FaTimes />
                         </button>
                     </div>
 
-                    <form onSubmit={handleMarkAttendance}>
-                        <div className="form-grid">
-                            <div>
-                                <label>Session</label>
-                                <select
-                                    name="session_id"
-                                    value={recordForm.session_id}
-                                    onChange={handleRecordChange}
-                                >
-                                    <option value="">Select session</option>
-                                    {sessions.map((session) => (
-                                        <option key={getSessionId(session)} value={getSessionId(session)}>
-                                            {session.session_name || session.title || "Attendance Session"} - {formatDate(session.session_date)}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label>Member</label>
-                                <select
-                                    name="member_id"
-                                    value={recordForm.member_id}
-                                    onChange={handleRecordChange}
-                                >
-                                    <option value="">Select member</option>
-                                    {members.map((member) => (
-                                        <option key={getMemberId(member)} value={getMemberId(member)}>
-                                            {member.first_name} {member.last_name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label>Status</label>
-                                <select
-                                    name="status"
-                                    value={recordForm.status}
-                                    onChange={handleRecordChange}
-                                >
-                                    <option value="Present">Present</option>
-                                    <option value="Absent">Absent</option>
-                                    <option value="Late">Late</option>
-                                    <option value="Excused">Excused</option>
-                                </select>
-                            </div>
-
-                            <div className="full-width">
-                                <label>Remarks</label>
-                                <textarea
-                                    name="remarks"
-                                    value={recordForm.remarks}
-                                    onChange={handleRecordChange}
-                                    rows="3"
-                                    placeholder="Optional remarks"
-                                ></textarea>
-                            </div>
+                    <div className="bulk-summary">
+                        <div>
+                            <strong>{bulkAttendance.length}</strong>
+                            <span>Total Members</span>
                         </div>
 
-                        <div className="form-actions">
-                            <button type="button" className="secondary-btn" onClick={resetForms}>
-                                Cancel
+                        <div>
+                            <strong>{bulkPresentCount}</strong>
+                            <span>Present</span>
+                        </div>
+
+                        <div>
+                            <strong>{bulkAbsentCount}</strong>
+                            <span>Absent</span>
+                        </div>
+                    </div>
+
+                    <div className="table-toolbar">
+                        <div className="toolbar-actions">
+                            <button
+                                className="secondary-btn"
+                                onClick={() => markAll("Present")}
+                                type="button"
+                            >
+                                <FaUserCheck /> Mark All Present
                             </button>
 
-                            <button type="submit" className="primary-btn" disabled={saving}>
-                                <FaSave /> {saving ? "Saving..." : "Save Attendance"}
+                            <button
+                                className="secondary-btn"
+                                onClick={() => markAll("Absent")}
+                                type="button"
+                            >
+                                <FaUserTimes /> Mark All Absent
                             </button>
                         </div>
-                    </form>
+
+                        <div className="search-box">
+                            <FaSearch />
+                            <input
+                                value={memberSearchTerm}
+                                onChange={(event) =>
+                                    setMemberSearchTerm(event.target.value)
+                                }
+                                placeholder="Search members..."
+                            />
+                        </div>
+                    </div>
+
+                    <div className="table-wrapper bulk-attendance-wrapper">
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Member</th>
+                                    <th>Status</th>
+                                    <th>Remarks</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {filteredBulkMembers.map((item) => (
+                                    <tr key={item.member_id}>
+                                        <td>
+                                            <strong>{item.member_name}</strong>
+                                        </td>
+
+                                        <td>
+                                            <div className="attendance-toggle">
+                                                <button
+                                                    type="button"
+                                                    className={
+                                                        item.status === "Present"
+                                                            ? "attendance-pill active-present"
+                                                            : "attendance-pill"
+                                                    }
+                                                    onClick={() =>
+                                                        updateBulkStatus(
+                                                            item.member_id,
+                                                            "Present"
+                                                        )
+                                                    }
+                                                >
+                                                    Present
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    className={
+                                                        item.status === "Absent"
+                                                            ? "attendance-pill active-absent"
+                                                            : "attendance-pill"
+                                                    }
+                                                    onClick={() =>
+                                                        updateBulkStatus(
+                                                            item.member_id,
+                                                            "Absent"
+                                                        )
+                                                    }
+                                                >
+                                                    Absent
+                                                </button>
+                                            </div>
+                                        </td>
+
+                                        <td>
+                                            <input
+                                                value={item.remarks}
+                                                onChange={(event) =>
+                                                    updateBulkRemarks(
+                                                        item.member_id,
+                                                        event.target.value
+                                                    )
+                                                }
+                                                placeholder="Optional remarks"
+                                            />
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="form-actions">
+                        <button
+                            className="secondary-btn"
+                            onClick={() => setShowBulkForm(false)}
+                            type="button"
+                            disabled={savingBulk}
+                        >
+                            Cancel
+                        </button>
+
+                        <button
+                            className="primary-btn"
+                            onClick={handleSaveBulkAttendance}
+                            type="button"
+                            disabled={savingBulk}
+                        >
+                            <FaSave />
+                            {savingBulk
+                                ? "Saving Attendance..."
+                                : "Save All Attendance"}
+                        </button>
+                    </div>
                 </div>
             )}
-
-            <div className="dashboard-grid">
-                <div className="stat-card">
-                    <div className="stat-icon">
-                        <FaClipboardCheck />
-                    </div>
-                    <h3>Total Sessions</h3>
-                    <p>{sessions.length}</p>
-                </div>
-
-                <div className="stat-card warning">
-                    <div className="stat-icon">
-                        <FaUsers />
-                    </div>
-                    <h3>Missing Members</h3>
-                    <p>{missingMembers.length}</p>
-                </div>
-            </div>
 
             <div className="table-card">
                 <div className="table-toolbar">
@@ -425,7 +819,9 @@ const Attendance = () => {
                             <FaSearch />
                             <input
                                 value={searchTerm}
-                                onChange={(event) => setSearchTerm(event.target.value)}
+                                onChange={(event) =>
+                                    setSearchTerm(event.target.value)
+                                }
                                 placeholder="Search sessions..."
                             />
                         </div>
@@ -437,7 +833,9 @@ const Attendance = () => {
                 </div>
 
                 {loading ? (
-                    <div className="loading-box">Loading attendance...</div>
+                    <div className="loading-box">
+                        Loading attendance sessions...
+                    </div>
                 ) : filteredSessions.length === 0 ? (
                     <div className="empty-state">
                         <FaClipboardCheck />
@@ -449,10 +847,11 @@ const Attendance = () => {
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>Session</th>
+                                    <th>Session Type</th>
                                     <th>Date</th>
-                                    <th>Type</th>
+                                    <th>Department</th>
                                     <th>Notes</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
 
@@ -460,11 +859,176 @@ const Attendance = () => {
                                 {filteredSessions.map((session) => (
                                     <tr key={getSessionId(session)}>
                                         <td>
-                                            <strong>{session.session_name || session.title || "Attendance Session"}</strong>
+                                            <strong>
+                                                {session.session_type ||
+                                                    session.type ||
+                                                    "Attendance Session"}
+                                            </strong>
                                         </td>
-                                        <td>{formatDate(session.session_date)}</td>
-                                        <td>{session.session_type || "-"}</td>
+
+                                        <td>
+                                            {formatDate(session.session_date) ||
+                                                formatDate(session.date) ||
+                                                "-"}
+                                        </td>
+
+                                        <td>
+                                            {session.department_name ||
+                                                session.department ||
+                                                "General Church"}
+                                        </td>
+
                                         <td>{session.notes || "-"}</td>
+
+                                        <td>
+                                            <div className="table-actions-inline">
+                                                <button
+                                                    className="table-action-btn"
+                                                    onClick={() =>
+                                                        fetchSessionRecords(session)
+                                                    }
+                                                >
+                                                    <FaEye /> View Records
+                                                </button>
+
+                                                {canEditAttendance && (
+                                                    <button
+                                                        className="table-action-btn"
+                                                        onClick={() =>
+                                                            prepareBulkAttendance(
+                                                                session
+                                                            )
+                                                        }
+                                                    >
+                                                        <FaUsers /> Take Attendance
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+
+            {selectedSession && (
+                <div className="table-card">
+                    <div className="table-toolbar">
+                        <div>
+                            <h2>Session Records</h2>
+                            <p>
+                                {selectedSession.session_type ||
+                                    selectedSession.type ||
+                                    "Attendance Session"}{" "}
+                                - {formatDate(selectedSession.session_date)}
+                            </p>
+                        </div>
+
+                        {canEditAttendance && (
+                            <button
+                                className="primary-btn"
+                                onClick={() =>
+                                    prepareBulkAttendance(selectedSession)
+                                }
+                            >
+                                <FaUsers /> Take Attendance
+                            </button>
+                        )}
+                    </div>
+
+                    {recordsLoading ? (
+                        <div className="loading-box">Loading records...</div>
+                    ) : records.length === 0 ? (
+                        <div className="empty-state">
+                            <FaClipboardCheck />
+                            <h3>No records for this session</h3>
+                            <p>Take attendance for this session.</p>
+                        </div>
+                    ) : (
+                        <div className="table-wrapper">
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Member</th>
+                                        <th>Status</th>
+                                        <th>Remarks</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    {records.map((record) => (
+                                        <tr key={getRecordId(record)}>
+                                            <td>
+                                                <strong>
+                                                    {getRecordMemberName(record)}
+                                                </strong>
+                                            </td>
+
+                                            <td>
+                                                <span
+                                                    className={`status-badge ${
+                                                        record.status || "Present"
+                                                    }`}
+                                                >
+                                                    {record.status || "Present"}
+                                                </span>
+                                            </td>
+
+                                            <td>
+                                                {record.remarks ||
+                                                    record.notes ||
+                                                    "-"}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            <div className="table-card">
+                <div className="table-toolbar">
+                    <div>
+                        <h2>Missing Members Alert</h2>
+                        <p>Members repeatedly marked absent will appear here.</p>
+                    </div>
+                </div>
+
+                {missingMembers.length === 0 ? (
+                    <div className="empty-state">
+                        <FaUserCheck />
+                        <h3>No missing member alerts</h3>
+                        <p>No member has reached the missing alert threshold.</p>
+                    </div>
+                ) : (
+                    <div className="table-wrapper">
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Member</th>
+                                    <th>Phone</th>
+                                    <th>Absent Count</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {missingMembers.map((member) => (
+                                    <tr key={getMemberId(member)}>
+                                        <td>
+                                            <strong>{getMemberName(member)}</strong>
+                                        </td>
+
+                                        <td>{member.phone || "-"}</td>
+
+                                        <td>
+                                            {member.absent_count ||
+                                                member.total_absences ||
+                                                "-"}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

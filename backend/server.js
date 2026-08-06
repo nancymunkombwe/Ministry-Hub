@@ -1,9 +1,12 @@
 const express = require("express");
 const cors = require("cors");
-require("dotenv").config();
-
+const dotenv = require("dotenv");
 const db = require("./src/config/db");
+
+dotenv.config();
+
 const authRoutes = require("./src/routes/authRoutes");
+const userRoutes = require("./src/routes/userRoutes");
 const memberRoutes = require("./src/routes/memberRoutes");
 const departmentRoutes = require("./src/routes/departmentRoutes");
 const visitorRoutes = require("./src/routes/visitorRoutes");
@@ -20,7 +23,30 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get("/", (req, res) => {
+    res.send("Ministry Hub API Running...");
+});
+
+app.get("/api/test-db", (req, res) => {
+    db.query("SELECT 1 + 1 AS result", (error, results) => {
+        if (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Database connection failed",
+                error: error.message
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Database connected successfully",
+            result: results[0].result
+        });
+    });
+});
+
 app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/members", memberRoutes);
 app.use("/api/departments", departmentRoutes);
 app.use("/api/visitors", visitorRoutes);
@@ -32,25 +58,9 @@ app.use("/api/care", careRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/reports", reportRoutes);
 
-app.get("/", (req, res) => {
-    res.send("Ministry Hub API Running...");
-});
-
-app.get("/api/test-db", (req, res) => {
-    db.query("SELECT 1 + 1 AS result", (error, results) => {
-        if (error) {
-            return res.status(500).json({
-                success: false,
-                message: "Database test failed",
-                error: error.message
-            });
-        }
-
-        res.json({
-            success: true,
-            message: "Database connection is working",
-            result: results[0].result
-        });
+app.use((req, res) => {
+    res.status(404).json({
+        message: "Route not found"
     });
 });
 

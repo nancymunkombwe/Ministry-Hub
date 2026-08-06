@@ -8,10 +8,16 @@ import {
     FaSave,
     FaUsers,
     FaUserSlash,
-    FaUserCheck
+    FaUserCheck,
+    FaTrash
 } from "react-icons/fa";
 
 import API from "../api/api";
+import { useAuth } from "../context/AuthContext";
+import {
+    canManageMembers,
+    getNoPermissionMessage
+} from "../utils/permissions";
 
 const emptyForm = {
     first_name: "",
@@ -25,21 +31,63 @@ const emptyForm = {
     status: "Active"
 };
 
+const createEmptyBulkRow = () => ({
+    first_name: "",
+    last_name: "",
+    gender: "Female",
+    phone: "",
+    email: "",
+    department: "",
+    baptism_date: "",
+    status: "Active",
+    address: ""
+});
+
 const Members = () => {
+    const { user } = useAuth();
+
+    const role = user?.role || "admin";
+    const canEditMembers = canManageMembers(role);
+
     const [members, setMembers] = useState([]);
 
     const [formData, setFormData] = useState(emptyForm);
+    const [bulkRows, setBulkRows] = useState([
+        createEmptyBulkRow(),
+        createEmptyBulkRow(),
+        createEmptyBulkRow(),
+        createEmptyBulkRow(),
+        createEmptyBulkRow()
+    ]);
+
     const [searchTerm, setSearchTerm] = useState("");
     const [editingId, setEditingId] = useState(null);
+
     const [showForm, setShowForm] = useState(false);
+    const [showBulkForm, setShowBulkForm] = useState(false);
 
     const [memberToToggle, setMemberToToggle] = useState(null);
     const [updatingStatus, setUpdatingStatus] = useState(false);
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [savingBulk, setSavingBulk] = useState(false);
+
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+
+    const scrollToForm = () => {
+        setTimeout(() => {
+            const formCard = document.querySelector(".form-card");
+
+            if (formCard) {
+                formCard.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start"
+                });
+            }
+        }, 100);
+    };
 
     const getMemberId = (member) => {
         return member.id || member.member_id;
@@ -114,12 +162,71 @@ const Members = () => {
         }));
     };
 
+    const handleBulkChange = (index, field, value) => {
+        setBulkRows((previousRows) =>
+            previousRows.map((row, rowIndex) =>
+                rowIndex === index
+                    ? {
+                          ...row,
+                          [field]: value
+                      }
+                    : row
+            )
+        );
+    };
+
+    const addBulkRow = () => {
+        setBulkRows((previousRows) => [
+            ...previousRows,
+            createEmptyBulkRow()
+        ]);
+    };
+
+    const removeBulkRow = (index) => {
+        setBulkRows((previousRows) => {
+            if (previousRows.length === 1) {
+                return previousRows;
+            }
+
+            return previousRows.filter((_, rowIndex) => rowIndex !== index);
+        });
+    };
+
     const openAddForm = () => {
+        if (!canEditMembers) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setFormData(emptyForm);
         setEditingId(null);
         setShowForm(true);
+        setShowBulkForm(false);
         setError("");
         setSuccess("");
+        scrollToForm();
+    };
+
+    const openBulkForm = () => {
+        if (!canEditMembers) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
+        setBulkRows([
+            createEmptyBulkRow(),
+            createEmptyBulkRow(),
+            createEmptyBulkRow(),
+            createEmptyBulkRow(),
+            createEmptyBulkRow()
+        ]);
+
+        setShowBulkForm(true);
+        setShowForm(false);
+        setEditingId(null);
+        setError("");
+        setSuccess("");
+        scrollToForm();
     };
 
     const resetForm = () => {
@@ -129,8 +236,26 @@ const Members = () => {
         setError("");
     };
 
+    const resetBulkForm = () => {
+        setBulkRows([
+            createEmptyBulkRow(),
+            createEmptyBulkRow(),
+            createEmptyBulkRow(),
+            createEmptyBulkRow(),
+            createEmptyBulkRow()
+        ]);
+
+        setShowBulkForm(false);
+        setError("");
+    };
+
     const handleSubmit = async (event) => {
         event.preventDefault();
+
+        if (!canEditMembers) {
+            setError(getNoPermissionMessage());
+            return;
+        }
 
         setSaving(true);
         setError("");
@@ -179,7 +304,78 @@ const Members = () => {
         }
     };
 
+    const handleSaveBulkMembers = async () => {
+        if (!canEditMembers) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
+        setSavingBulk(true);
+        setError("");
+        setSuccess("");
+
+        const rowsWithData = bulkRows.filter((row) => {
+            return (
+                row.first_name.trim() ||
+                row.last_name.trim() ||
+                row.phone.trim() ||
+                row.email.trim() ||
+                row.department.trim()
+            );
+        });
+
+        if (rowsWithData.length === 0) {
+            setError("Please enter at least one member.");
+            setSavingBulk(false);
+            return;
+        }
+
+        const hasInvalidRow = rowsWithData.some((row) => {
+            return !row.first_name.trim() || !row.last_name.trim() || !row.gender;
+        });
+
+        if (hasInvalidRow) {
+            setError("Each member must have first name, last name, and gender.");
+            setSavingBulk(false);
+            return;
+        }
+
+        try {
+            for (const row of rowsWithData) {
+                const payload = {
+                    first_name: row.first_name,
+                    last_name: row.last_name,
+                    gender: row.gender,
+                    phone: row.phone,
+                    email: row.email,
+                    address: row.address,
+                    department: row.department,
+                    baptism_date: row.baptism_date || null,
+                    status: row.status
+                };
+
+                await API.post("/members", payload);
+            }
+
+            setSuccess(`${rowsWithData.length} member(s) added successfully.`);
+            resetBulkForm();
+            await fetchMembers();
+        } catch (error) {
+            setError(
+                error.response?.data?.message ||
+                    "Failed to save bulk members. Some members may have already been saved."
+            );
+        } finally {
+            setSavingBulk(false);
+        }
+    };
+
     const openStatusModal = (member) => {
+        if (!canEditMembers) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setMemberToToggle(member);
         setError("");
         setSuccess("");
@@ -190,6 +386,11 @@ const Members = () => {
     };
 
     const confirmStatusChange = async () => {
+        if (!canEditMembers) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         if (!memberToToggle) {
             return;
         }
@@ -235,6 +436,11 @@ const Members = () => {
     };
 
     const handleEdit = (member) => {
+        if (!canEditMembers) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setEditingId(getMemberId(member));
 
         setFormData({
@@ -250,10 +456,10 @@ const Members = () => {
         });
 
         setShowForm(true);
+        setShowBulkForm(false);
         setSuccess("");
         setError("");
-
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        scrollToForm();
     };
 
     return (
@@ -262,13 +468,27 @@ const Members = () => {
                 <div>
                     <span className="eyebrow">Member Management</span>
                     <h1>Members</h1>
-                    <p>Register, update, and manage church members.</p>
+                    <p>Register, update, bulk add, and manage church members.</p>
                 </div>
 
-                <button className="primary-btn" onClick={openAddForm}>
-                    <FaPlus /> Add Member
-                </button>
+                {canEditMembers && (
+                    <div className="toolbar-actions">
+                        <button className="secondary-btn" onClick={openBulkForm}>
+                            <FaUsers /> Add Multiple
+                        </button>
+
+                        <button className="primary-btn" onClick={openAddForm}>
+                            <FaPlus /> Add Member
+                        </button>
+                    </div>
+                )}
             </div>
+
+            {!canEditMembers && (
+                <div className="info-message">
+                    {getNoPermissionMessage()}
+                </div>
+            )}
 
             {error && <div className="page-error">{error}</div>}
             {success && <div className="success-message">{success}</div>}
@@ -353,7 +573,190 @@ const Members = () => {
                 </div>
             </div>
 
-            {showForm && (
+            {showBulkForm && canEditMembers && (
+                <div className="form-card">
+                    <div className="section-header">
+                        <div>
+                            <h2>Add Multiple Members</h2>
+                            <p>Enter many members and save them all at once.</p>
+                        </div>
+
+                        <button className="icon-btn" onClick={resetBulkForm}>
+                            <FaTimes />
+                        </button>
+                    </div>
+
+                    <div className="bulk-member-actions">
+                        <button
+                            type="button"
+                            className="secondary-btn"
+                            onClick={addBulkRow}
+                        >
+                            <FaPlus /> Add Row
+                        </button>
+
+                        <span>{bulkRows.length} row(s)</span>
+                    </div>
+
+                    <div className="table-wrapper bulk-members-wrapper">
+                        <table className="data-table bulk-members-table">
+                            <thead>
+                                <tr>
+                                    <th>First Name</th>
+                                    <th>Last Name</th>
+                                    <th>Gender</th>
+                                    <th>Phone</th>
+                                    <th>Email</th>
+                                    <th>Department</th>
+                                    <th>Status</th>
+                                    <th>Remove</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {bulkRows.map((row, index) => (
+                                    <tr key={index}>
+                                        <td>
+                                            <input
+                                                value={row.first_name}
+                                                onChange={(event) =>
+                                                    handleBulkChange(
+                                                        index,
+                                                        "first_name",
+                                                        event.target.value
+                                                    )
+                                                }
+                                                placeholder="First name"
+                                            />
+                                        </td>
+
+                                        <td>
+                                            <input
+                                                value={row.last_name}
+                                                onChange={(event) =>
+                                                    handleBulkChange(
+                                                        index,
+                                                        "last_name",
+                                                        event.target.value
+                                                    )
+                                                }
+                                                placeholder="Last name"
+                                            />
+                                        </td>
+
+                                        <td>
+                                            <select
+                                                value={row.gender}
+                                                onChange={(event) =>
+                                                    handleBulkChange(
+                                                        index,
+                                                        "gender",
+                                                        event.target.value
+                                                    )
+                                                }
+                                            >
+                                                <option value="Female">Female</option>
+                                                <option value="Male">Male</option>
+                                            </select>
+                                        </td>
+
+                                        <td>
+                                            <input
+                                                value={row.phone}
+                                                onChange={(event) =>
+                                                    handleBulkChange(
+                                                        index,
+                                                        "phone",
+                                                        event.target.value
+                                                    )
+                                                }
+                                                placeholder="Phone"
+                                            />
+                                        </td>
+
+                                        <td>
+                                            <input
+                                                value={row.email}
+                                                onChange={(event) =>
+                                                    handleBulkChange(
+                                                        index,
+                                                        "email",
+                                                        event.target.value
+                                                    )
+                                                }
+                                                placeholder="Email"
+                                            />
+                                        </td>
+
+                                        <td>
+                                            <input
+                                                value={row.department}
+                                                onChange={(event) =>
+                                                    handleBulkChange(
+                                                        index,
+                                                        "department",
+                                                        event.target.value
+                                                    )
+                                                }
+                                                placeholder="Department"
+                                            />
+                                        </td>
+
+                                        <td>
+                                            <select
+                                                value={row.status}
+                                                onChange={(event) =>
+                                                    handleBulkChange(
+                                                        index,
+                                                        "status",
+                                                        event.target.value
+                                                    )
+                                                }
+                                            >
+                                                <option value="Active">Active</option>
+                                                <option value="Inactive">Inactive</option>
+                                            </select>
+                                        </td>
+
+                                        <td>
+                                            <button
+                                                type="button"
+                                                className="table-delete-btn"
+                                                onClick={() => removeBulkRow(index)}
+                                            >
+                                                <FaTrash />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="form-actions">
+                        <button
+                            type="button"
+                            className="secondary-btn"
+                            onClick={resetBulkForm}
+                            disabled={savingBulk}
+                        >
+                            Cancel
+                        </button>
+
+                        <button
+                            type="button"
+                            className="primary-btn"
+                            onClick={handleSaveBulkMembers}
+                            disabled={savingBulk}
+                        >
+                            <FaSave />
+                            {savingBulk ? "Saving Members..." : "Save All Members"}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {showForm && canEditMembers && (
                 <div className="form-card">
                     <div className="section-header">
                         <div>
@@ -534,7 +937,7 @@ const Members = () => {
                                     <th>Phone</th>
                                     <th>Department</th>
                                     <th>Status</th>
-                                    <th>Actions</th>
+                                    {canEditMembers && <th>Actions</th>}
                                 </tr>
                             </thead>
 
@@ -561,34 +964,38 @@ const Members = () => {
                                             </span>
                                         </td>
 
-                                        <td>
-                                            <div className="table-actions-inline">
-                                                <button
-                                                    className="table-action-btn"
-                                                    onClick={() => handleEdit(member)}
-                                                >
-                                                    <FaEdit /> Edit
-                                                </button>
+                                        {canEditMembers && (
+                                            <td>
+                                                <div className="table-actions-inline">
+                                                    <button
+                                                        className="table-action-btn"
+                                                        onClick={() =>
+                                                            handleEdit(member)
+                                                        }
+                                                    >
+                                                        <FaEdit /> Edit
+                                                    </button>
 
-                                                <button
-                                                    className="table-delete-btn"
-                                                    onClick={() =>
-                                                        openStatusModal(member)
-                                                    }
-                                                >
-                                                    {(member.status || "Active") ===
-                                                    "Active" ? (
-                                                        <>
-                                                            <FaUserSlash /> Deactivate
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <FaUserCheck /> Activate
-                                                        </>
-                                                    )}
-                                                </button>
-                                            </div>
-                                        </td>
+                                                    <button
+                                                        className="table-delete-btn"
+                                                        onClick={() =>
+                                                            openStatusModal(member)
+                                                        }
+                                                    >
+                                                        {(member.status || "Active") ===
+                                                        "Active" ? (
+                                                            <>
+                                                                <FaUserSlash /> Deactivate
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <FaUserCheck /> Activate
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>

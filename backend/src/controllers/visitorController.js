@@ -82,20 +82,9 @@ const createVisitor = (req, res) => {
 // GET ALL VISITORS
 const getVisitors = (req, res) => {
     const sql = `
-        SELECT
-            id,
-            first_name,
-            last_name,
-            CONCAT(first_name, ' ', last_name) AS full_name,
-            phone,
-            email,
-            address,
-            visit_date,
-            invited_by,
-            follow_up_status,
-            created_at
+        SELECT *
         FROM visitors
-        ORDER BY visit_date DESC, created_at DESC
+        ORDER BY id DESC
     `;
 
     db.query(sql, (error, results) => {
@@ -107,10 +96,17 @@ const getVisitors = (req, res) => {
             });
         }
 
+        const visitors = results.map((visitor) => ({
+            ...visitor,
+            full_name:
+                visitor.full_name ||
+                `${visitor.first_name || ""} ${visitor.last_name || ""}`.trim()
+        }));
+
         res.json({
             success: true,
-            count: results.length,
-            visitors: results
+            count: visitors.length,
+            visitors
         });
     });
 };
@@ -120,18 +116,7 @@ const getVisitorById = (req, res) => {
     const { id } = req.params;
 
     const sql = `
-        SELECT
-            id,
-            first_name,
-            last_name,
-            CONCAT(first_name, ' ', last_name) AS full_name,
-            phone,
-            email,
-            address,
-            visit_date,
-            invited_by,
-            follow_up_status,
-            created_at
+        SELECT *
         FROM visitors
         WHERE id = ?
     `;
@@ -152,9 +137,16 @@ const getVisitorById = (req, res) => {
             });
         }
 
+        const visitor = {
+            ...results[0],
+            full_name:
+                results[0].full_name ||
+                `${results[0].first_name || ""} ${results[0].last_name || ""}`.trim()
+        };
+
         res.json({
             success: true,
-            visitor: results[0]
+            visitor
         });
     });
 };
@@ -354,19 +346,10 @@ const getVisitorFollowUps = (req, res) => {
     const { visitorId } = req.params;
 
     const sql = `
-        SELECT
-            vf.id,
-            vf.visitor_id,
-            vf.follow_up_date,
-            vf.method,
-            vf.notes,
-            vf.status,
-            vf.created_at,
-            u.full_name AS followed_by_name
-        FROM visitor_followups vf
-        LEFT JOIN users u ON vf.followed_by = u.id
-        WHERE vf.visitor_id = ?
-        ORDER BY vf.follow_up_date DESC, vf.created_at DESC
+        SELECT *
+        FROM visitor_followups
+        WHERE visitor_id = ?
+        ORDER BY id DESC
     `;
 
     db.query(sql, [visitorId], (error, results) => {

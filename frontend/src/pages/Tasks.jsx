@@ -6,17 +6,24 @@ import {
     FaEdit,
     FaTimes,
     FaSave,
+    FaTrash,
     FaTasks,
-    FaTrash
+    FaCheckCircle,
+    FaClock,
+    FaUserCheck
 } from "react-icons/fa";
 
 import API from "../api/api";
+import { useAuth } from "../context/AuthContext";
+import {
+    canManageTasks,
+    getNoPermissionMessage
+} from "../utils/permissions";
 
 const emptyForm = {
     title: "",
     description: "",
     assigned_to: "",
-    department_id: "",
     related_member_id: "",
     due_date: "",
     priority: "Medium",
@@ -24,44 +31,141 @@ const emptyForm = {
 };
 
 const Tasks = () => {
+    const { user } = useAuth();
+
+    const role = user?.role || "admin";
+    const canEditTasks = canManageTasks(role);
+
     const [tasks, setTasks] = useState([]);
+    const [users, setUsers] = useState([]);
+    const [members, setMembers] = useState([]);
+
     const [formData, setFormData] = useState(emptyForm);
     const [searchTerm, setSearchTerm] = useState("");
     const [editingId, setEditingId] = useState(null);
-    const [showForm, setShowForm] = useState(false);
 
+    const [showForm, setShowForm] = useState(false);
     const [taskToDelete, setTaskToDelete] = useState(null);
-    const [deleting, setDeleting] = useState(false);
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [updatingStatus, setUpdatingStatus] = useState(false);
+
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
 
-    const getTaskId = (task) => task.id || task.task_id;
+    const scrollToForm = () => {
+        setTimeout(() => {
+            const formCard = document.querySelector(".form-card");
+
+            if (formCard) {
+                formCard.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start"
+                });
+            }
+        }, 100);
+    };
+
+    const getTaskId = (task) => {
+        return task.id || task.task_id;
+    };
+
+    const getUserId = (user) => {
+        return user.id || user.user_id;
+    };
+
+    const getMemberId = (member) => {
+        return member.id || member.member_id;
+    };
+
+    const getUserName = (user) => {
+        return (
+            user.full_name ||
+            user.name ||
+            `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
+            user.email ||
+            "User"
+        );
+    };
+
+    const getMemberName = (member) => {
+        return (
+            member.member_name ||
+            member.full_name ||
+            `${member.first_name || ""} ${member.last_name || ""}`.trim() ||
+            "Member"
+        );
+    };
+
+    const getAssignedUserName = (task) => {
+        return (
+            task.assigned_to_name ||
+            task.assigned_user_name ||
+            task.user_name ||
+            task.full_name ||
+            task.assigned_to ||
+            "Unassigned"
+        );
+    };
+
+    const getRelatedMemberName = (task) => {
+        return (
+            task.related_member_name ||
+            task.member_name ||
+            `${task.member_first_name || ""} ${task.member_last_name || ""}`.trim() ||
+            "-"
+        );
+    };
 
     const formatDate = (dateValue) => {
         if (!dateValue) return "";
         return String(dateValue).split("T")[0];
     };
 
-    const fetchTasks = async () => {
+    const fetchData = async () => {
         setLoading(true);
         setError("");
 
         try {
-            const response = await API.get("/tasks");
+            const [tasksResponse, usersResponse, membersResponse] =
+                await Promise.allSettled([
+                    API.get("/tasks"),
+                    API.get("/users"),
+                    API.get("/members")
+                ]);
 
-            const taskList =
-                response.data.tasks ||
-                response.data.data ||
-                response.data;
+            if (tasksResponse.status === "fulfilled") {
+                const taskList =
+                    tasksResponse.value.data.tasks ||
+                    tasksResponse.value.data.data ||
+                    tasksResponse.value.data;
 
-            setTasks(Array.isArray(taskList) ? taskList : []);
+                setTasks(Array.isArray(taskList) ? taskList : []);
+            }
+
+            if (usersResponse.status === "fulfilled") {
+                const userList =
+                    usersResponse.value.data.users ||
+                    usersResponse.value.data.data ||
+                    usersResponse.value.data;
+
+                setUsers(Array.isArray(userList) ? userList : []);
+            }
+
+            if (membersResponse.status === "fulfilled") {
+                const memberList =
+                    membersResponse.value.data.members ||
+                    membersResponse.value.data.data ||
+                    membersResponse.value.data;
+
+                setMembers(Array.isArray(memberList) ? memberList : []);
+            }
         } catch (error) {
             setError(
                 error.response?.data?.message ||
-                    "Failed to load tasks. Please check if the backend is running."
+                    "Failed to load task data. Please check if the backend is running."
             );
         } finally {
             setLoading(false);
@@ -69,7 +173,7 @@ const Tasks = () => {
     };
 
     useEffect(() => {
-        fetchTasks();
+        fetchData();
     }, []);
 
     const filteredTasks = useMemo(() => {
@@ -77,13 +181,28 @@ const Tasks = () => {
             const searchableText = `
                 ${task.title || ""}
                 ${task.description || ""}
-                ${task.status || ""}
                 ${task.priority || ""}
+                ${task.status || ""}
+                ${getAssignedUserName(task)}
+                ${getRelatedMemberName(task)}
+                ${task.due_date || ""}
             `.toLowerCase();
 
             return searchableText.includes(searchTerm.toLowerCase());
         });
     }, [tasks, searchTerm]);
+
+    const pendingTasks = tasks.filter(
+        (task) => (task.status || "Pending") === "Pending"
+    ).length;
+
+    const completedTasks = tasks.filter(
+        (task) => task.status === "Completed"
+    ).length;
+
+    const highPriorityTasks = tasks.filter(
+        (task) => task.priority === "High"
+    ).length;
 
     const handleChange = (event) => {
         const { name, value } = event.target;
@@ -95,11 +214,17 @@ const Tasks = () => {
     };
 
     const openAddForm = () => {
+        if (!canEditTasks) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setFormData(emptyForm);
         setEditingId(null);
         setShowForm(true);
         setError("");
         setSuccess("");
+        scrollToForm();
     };
 
     const resetForm = () => {
@@ -111,6 +236,11 @@ const Tasks = () => {
 
     const handleSubmit = async (event) => {
         event.preventDefault();
+
+        if (!canEditTasks) {
+            setError(getNoPermissionMessage());
+            return;
+        }
 
         setSaving(true);
         setError("");
@@ -124,11 +254,15 @@ const Tasks = () => {
 
         try {
             const payload = {
-                ...formData,
+                title: formData.title,
+                description: formData.description,
                 assigned_to: formData.assigned_to || null,
-                department_id: formData.department_id || null,
+                assigned_to_user_id: formData.assigned_to || null,
                 related_member_id: formData.related_member_id || null,
-                due_date: formData.due_date || null
+                member_id: formData.related_member_id || null,
+                due_date: formData.due_date || null,
+                priority: formData.priority,
+                status: formData.status
             };
 
             if (editingId) {
@@ -136,11 +270,11 @@ const Tasks = () => {
                 setSuccess("Task updated successfully.");
             } else {
                 await API.post("/tasks", payload);
-                setSuccess("Task added successfully.");
+                setSuccess("Task created successfully.");
             }
 
             resetForm();
-            await fetchTasks();
+            await fetchData();
         } catch (error) {
             setError(
                 error.response?.data?.message ||
@@ -151,7 +285,36 @@ const Tasks = () => {
         }
     };
 
+    const handleEdit = (task) => {
+        if (!canEditTasks) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
+        setEditingId(getTaskId(task));
+
+        setFormData({
+            title: task.title || "",
+            description: task.description || "",
+            assigned_to: task.assigned_to || task.assigned_to_user_id || "",
+            related_member_id: task.related_member_id || task.member_id || "",
+            due_date: formatDate(task.due_date),
+            priority: task.priority || "Medium",
+            status: task.status || "Pending"
+        });
+
+        setShowForm(true);
+        setError("");
+        setSuccess("");
+        scrollToForm();
+    };
+
     const openDeleteModal = (task) => {
+        if (!canEditTasks) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setTaskToDelete(task);
         setError("");
         setSuccess("");
@@ -162,19 +325,30 @@ const Tasks = () => {
     };
 
     const confirmDelete = async () => {
-        if (!taskToDelete) {
+        if (!canEditTasks) {
+            setError(getNoPermissionMessage());
             return;
         }
+
+        if (!taskToDelete) return;
+
+        const taskId = getTaskId(taskToDelete);
 
         setDeleting(true);
         setError("");
         setSuccess("");
 
         try {
-            await API.delete(`/tasks/${getTaskId(taskToDelete)}`);
+            await API.delete(`/tasks/${taskId}`);
+
+            setTasks((previousTasks) =>
+                previousTasks.filter(
+                    (task) => String(getTaskId(task)) !== String(taskId)
+                )
+            );
+
             setSuccess("Task deleted successfully.");
             setTaskToDelete(null);
-            await fetchTasks();
         } catch (error) {
             setError(
                 error.response?.data?.message ||
@@ -185,40 +359,32 @@ const Tasks = () => {
         }
     };
 
-    const handleEdit = (task) => {
-        setEditingId(getTaskId(task));
+    const markTaskCompleted = async (task) => {
+        if (!canEditTasks) {
+            setError(getNoPermissionMessage());
+            return;
+        }
 
-        setFormData({
-            title: task.title || "",
-            description: task.description || "",
-            assigned_to: task.assigned_to || "",
-            department_id: task.department_id || "",
-            related_member_id: task.related_member_id || "",
-            due_date: formatDate(task.due_date),
-            priority: task.priority || "Medium",
-            status: task.status || "Pending"
-        });
+        const taskId = getTaskId(task);
 
-        setShowForm(true);
-        setSuccess("");
-        setError("");
-
-        window.scrollTo({ top: 0, behavior: "smooth" });
-    };
-
-    const quickUpdateStatus = async (task, status) => {
+        setUpdatingStatus(true);
         setError("");
         setSuccess("");
 
         try {
-            await API.patch(`/tasks/${getTaskId(task)}/status`, { status });
-            setSuccess("Task status updated successfully.");
-            await fetchTasks();
+            await API.patch(`/tasks/${taskId}/status`, {
+                status: "Completed"
+            });
+
+            setSuccess("Task marked as completed.");
+            await fetchData();
         } catch (error) {
             setError(
                 error.response?.data?.message ||
                     "Failed to update task status."
             );
+        } finally {
+            setUpdatingStatus(false);
         }
     };
 
@@ -228,13 +394,24 @@ const Tasks = () => {
                 <div>
                     <span className="eyebrow">Task Management</span>
                     <h1>Tasks</h1>
-                    <p>Assign and track church leader tasks.</p>
+                    <p>
+                        Assign tasks to church workers and link them to members where
+                        needed.
+                    </p>
                 </div>
 
-                <button className="primary-btn" onClick={openAddForm}>
-                    <FaPlus /> Add Task
-                </button>
+                {canEditTasks && (
+                    <button className="primary-btn" onClick={openAddForm}>
+                        <FaPlus /> Add Task
+                    </button>
+                )}
             </div>
+
+            {!canEditTasks && (
+                <div className="info-message">
+                    {getNoPermissionMessage()}
+                </div>
+            )}
 
             {error && <div className="page-error">{error}</div>}
             {success && <div className="success-message">{success}</div>}
@@ -278,12 +455,46 @@ const Tasks = () => {
                 </div>
             )}
 
-            {showForm && (
+            <div className="dashboard-grid">
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaTasks />
+                    </div>
+                    <h3>Total Tasks</h3>
+                    <p>{tasks.length}</p>
+                </div>
+
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaClock />
+                    </div>
+                    <h3>Pending Tasks</h3>
+                    <p>{pendingTasks}</p>
+                </div>
+
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaCheckCircle />
+                    </div>
+                    <h3>Completed Tasks</h3>
+                    <p>{completedTasks}</p>
+                </div>
+
+                <div className="stat-card warning">
+                    <div className="stat-icon">
+                        <FaUserCheck />
+                    </div>
+                    <h3>High Priority</h3>
+                    <p>{highPriorityTasks}</p>
+                </div>
+            </div>
+
+            {showForm && canEditTasks && (
                 <div className="form-card">
                     <div className="section-header">
                         <div>
                             <h2>{editingId ? "Edit Task" : "Add New Task"}</h2>
-                            <p>Create or update a ministry task.</p>
+                            <p>Enter task details below.</p>
                         </div>
 
                         <button className="icon-btn" onClick={resetForm}>
@@ -294,43 +505,54 @@ const Tasks = () => {
                     <form onSubmit={handleSubmit}>
                         <div className="form-grid">
                             <div>
-                                <label>Title</label>
+                                <label>Task Title</label>
                                 <input
                                     name="title"
                                     value={formData.title}
                                     onChange={handleChange}
-                                    placeholder="e.g. Follow up John Banda"
+                                    placeholder="e.g. Follow up with missing member"
                                 />
                             </div>
 
                             <div>
-                                <label>Assigned To User ID</label>
-                                <input
+                                <label>Assigned To</label>
+                                <select
                                     name="assigned_to"
                                     value={formData.assigned_to}
                                     onChange={handleChange}
-                                    placeholder="Optional"
-                                />
+                                >
+                                    <option value="">Unassigned</option>
+
+                                    {users.map((user) => (
+                                        <option
+                                            key={getUserId(user)}
+                                            value={getUserId(user)}
+                                        >
+                                            {getUserName(user)}{" "}
+                                            {user.role ? `(${user.role})` : ""}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
 
                             <div>
-                                <label>Department ID</label>
-                                <input
-                                    name="department_id"
-                                    value={formData.department_id}
-                                    onChange={handleChange}
-                                    placeholder="Optional"
-                                />
-                            </div>
-
-                            <div>
-                                <label>Related Member ID</label>
-                                <input
+                                <label>Related Member</label>
+                                <select
                                     name="related_member_id"
                                     value={formData.related_member_id}
                                     onChange={handleChange}
-                                    placeholder="Optional"
-                                />
+                                >
+                                    <option value="">No related member</option>
+
+                                    {members.map((member) => (
+                                        <option
+                                            key={getMemberId(member)}
+                                            value={getMemberId(member)}
+                                        >
+                                            {getMemberName(member)}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
 
                             <div>
@@ -410,7 +632,7 @@ const Tasks = () => {
             <div className="table-card">
                 <div className="table-toolbar">
                     <div>
-                        <h2>Ministry Tasks</h2>
+                        <h2>Church Tasks</h2>
                         <p>{filteredTasks.length} task(s) found</p>
                     </div>
 
@@ -426,7 +648,7 @@ const Tasks = () => {
                             />
                         </div>
 
-                        <button className="secondary-btn" onClick={fetchTasks}>
+                        <button className="secondary-btn" onClick={fetchData}>
                             <FaSyncAlt /> Refresh
                         </button>
                     </div>
@@ -445,11 +667,13 @@ const Tasks = () => {
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>Title</th>
+                                    <th>Task</th>
+                                    <th>Assigned To</th>
+                                    <th>Related Member</th>
+                                    <th>Due Date</th>
                                     <th>Priority</th>
                                     <th>Status</th>
-                                    <th>Due Date</th>
-                                    <th>Actions</th>
+                                    {canEditTasks && <th>Actions</th>}
                                 </tr>
                             </thead>
 
@@ -458,9 +682,21 @@ const Tasks = () => {
                                     <tr key={getTaskId(task)}>
                                         <td>
                                             <strong>{task.title}</strong>
+                                            <br />
+                                            <small>{task.description || ""}</small>
                                         </td>
 
-                                        <td>{task.priority || "-"}</td>
+                                        <td>{getAssignedUserName(task)}</td>
+
+                                        <td>{getRelatedMemberName(task)}</td>
+
+                                        <td>{formatDate(task.due_date) || "-"}</td>
+
+                                        <td>
+                                            <span className="status-badge">
+                                                {task.priority || "Medium"}
+                                            </span>
+                                        </td>
 
                                         <td>
                                             <span
@@ -472,39 +708,39 @@ const Tasks = () => {
                                             </span>
                                         </td>
 
-                                        <td>{formatDate(task.due_date) || "-"}</td>
+                                        {canEditTasks && (
+                                            <td>
+                                                <div className="table-actions-inline">
+                                                    {task.status !== "Completed" && (
+                                                        <button
+                                                            className="table-action-btn"
+                                                            onClick={() =>
+                                                                markTaskCompleted(task)
+                                                            }
+                                                            disabled={updatingStatus}
+                                                        >
+                                                            <FaCheckCircle /> Complete
+                                                        </button>
+                                                    )}
 
-                                        <td>
-                                            <div className="table-actions-inline">
-                                                <button
-                                                    className="table-action-btn"
-                                                    onClick={() => handleEdit(task)}
-                                                >
-                                                    <FaEdit /> Edit
-                                                </button>
+                                                    <button
+                                                        className="table-action-btn"
+                                                        onClick={() => handleEdit(task)}
+                                                    >
+                                                        <FaEdit /> Edit
+                                                    </button>
 
-                                                <button
-                                                    className="table-action-btn"
-                                                    onClick={() =>
-                                                        quickUpdateStatus(
-                                                            task,
-                                                            "Completed"
-                                                        )
-                                                    }
-                                                >
-                                                    Complete
-                                                </button>
-
-                                                <button
-                                                    className="table-delete-btn"
-                                                    onClick={() =>
-                                                        openDeleteModal(task)
-                                                    }
-                                                >
-                                                    <FaTrash /> Delete
-                                                </button>
-                                            </div>
-                                        </td>
+                                                    <button
+                                                        className="table-delete-btn"
+                                                        onClick={() =>
+                                                            openDeleteModal(task)
+                                                        }
+                                                    >
+                                                        <FaTrash /> Delete
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>

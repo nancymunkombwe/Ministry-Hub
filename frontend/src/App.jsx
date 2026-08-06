@@ -1,5 +1,11 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+
+import "./styles/main.css";
+
 import { AuthProvider } from "./context/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import AdminRoute from "./components/AdminRoute";
+import AppLayout from "./layouts/AppLayout";
 
 import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
@@ -14,11 +20,7 @@ import Contributions from "./pages/Contributions";
 import CareFollowups from "./pages/CareFollowups";
 import Tasks from "./pages/Tasks";
 import Reports from "./pages/Reports";
-
-import ProtectedRoute from "./components/ProtectedRoute";
-import AppLayout from "./layouts/AppLayout";
-
-import "./styles/main.css";
+import Users from "./pages/Users";
 
 function App() {
     return (
@@ -41,18 +43,23 @@ function App() {
                         <Route path="/departments" element={<Departments />} />
                         <Route path="/attendance" element={<Attendance />} />
                         <Route path="/events" element={<Events />} />
-                        <Route
-                            path="/announcements"
-                            element={<Announcements />}
-                        />
-                        <Route
-                            path="/contributions"
-                            element={<Contributions />}
-                        />
+                        <Route path="/announcements" element={<Announcements />} />
+                        <Route path="/contributions" element={<Contributions />} />
                         <Route path="/care" element={<CareFollowups />} />
                         <Route path="/tasks" element={<Tasks />} />
                         <Route path="/reports" element={<Reports />} />
+
+                        <Route
+                            path="/users"
+                            element={
+                                <AdminRoute>
+                                    <Users />
+                                </AdminRoute>
+                            }
+                        />
                     </Route>
+
+                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
             </BrowserRouter>
         </AuthProvider>

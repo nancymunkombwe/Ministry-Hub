@@ -1,31 +1,77 @@
 const express = require("express");
+const taskController = require("../controllers/taskController");
 
-const {
-    createTask,
-    getTasks,
-    getTaskById,
-    getTasksAssignedToUser,
-    updateTask,
-    updateTaskStatus,
-    deleteTask
-} = require("../controllers/taskController");
-
-const {
-    protect,
-    authorize
-} = require("../middleware/authMiddleware");
+const { protect, authorize } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-router.post("/", protect, authorize("admin", "leader"), createTask);
-router.get("/", protect, authorize("admin", "leader"), getTasks);
+const pickHandler = (...names) => {
+    const handler = names
+        .map((name) => taskController[name])
+        .find((fn) => typeof fn === "function");
 
-// Important: these specific routes must come before "/:id"
-router.get("/assigned/:userId", protect, authorize("admin", "leader"), getTasksAssignedToUser);
-router.patch("/:id/status", protect, authorize("admin", "leader"), updateTaskStatus);
+    return handler || ((req, res) => {
+        res.status(500).json({
+            message: `Missing task controller function. Tried: ${names.join(", ")}`
+        });
+    });
+};
 
-router.get("/:id", protect, authorize("admin", "leader"), getTaskById);
-router.put("/:id", protect, authorize("admin", "leader"), updateTask);
-router.delete("/:id", protect, authorize("admin"), deleteTask);
+const createTask = pickHandler("createTask", "addTask");
+const getTasks = pickHandler("getTasks", "getAllTasks");
+const getTaskById = pickHandler("getTaskById", "getTask");
+const updateTask = pickHandler("updateTask", "editTask");
+const deleteTask = pickHandler("deleteTask", "removeTask");
+
+const getTasksByAssignedUser = pickHandler(
+    "getTasksByAssignedUser",
+    "getAssignedTasks",
+    "getTasksByUser",
+    "getUserTasks"
+);
+
+const updateTaskStatus = pickHandler(
+    "updateTaskStatus",
+    "changeTaskStatus",
+    "markTaskStatus"
+);
+
+router.get("/", protect, getTasks);
+
+router.post(
+    "/",
+    protect,
+    authorize("admin", "leader"),
+    createTask
+);
+
+router.get(
+    "/assigned/:userId",
+    protect,
+    getTasksByAssignedUser
+);
+
+router.get("/:id", protect, getTaskById);
+
+router.put(
+    "/:id",
+    protect,
+    authorize("admin", "leader"),
+    updateTask
+);
+
+router.patch(
+    "/:id/status",
+    protect,
+    authorize("admin", "leader"),
+    updateTaskStatus
+);
+
+router.delete(
+    "/:id",
+    protect,
+    authorize("admin", "leader"),
+    deleteTask
+);
 
 module.exports = router;

@@ -1,25 +1,53 @@
 const express = require("express");
+const departmentController = require("../controllers/departmentController");
 
-const {
-    createDepartment,
-    getDepartments,
-    getDepartmentById,
-    updateDepartment,
-    assignMemberToDepartment,
-    getMemberDepartments,
-    removeMemberFromDepartment,
-    deleteDepartment
-} = require("../controllers/departmentController");
-
-const {
-    protect,
-    authorize
-} = require("../middleware/authMiddleware");
+const { protect, authorize } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-router.post("/", protect, authorize("admin"), createDepartment);
+const pickHandler = (...names) => {
+    const handler = names
+        .map((name) => departmentController[name])
+        .find((fn) => typeof fn === "function");
+
+    return handler || ((req, res) => {
+        res.status(500).json({
+            message: `Missing department controller function. Tried: ${names.join(", ")}`
+        });
+    });
+};
+
+const createDepartment = pickHandler("createDepartment", "addDepartment");
+const getDepartments = pickHandler("getDepartments", "getAllDepartments");
+const getDepartmentById = pickHandler("getDepartmentById", "getDepartment");
+const updateDepartment = pickHandler("updateDepartment", "editDepartment");
+const deleteDepartment = pickHandler("deleteDepartment", "removeDepartment");
+
+const assignMemberToDepartment = pickHandler(
+    "assignMemberToDepartment",
+    "assignMember",
+    "addMemberToDepartment"
+);
+
+const getMemberDepartments = pickHandler(
+    "getMemberDepartments",
+    "getDepartmentsByMember"
+);
+
+const removeMemberFromDepartment = pickHandler(
+    "removeMemberFromDepartment",
+    "deleteMemberFromDepartment",
+    "removeMemberDepartment"
+);
+
 router.get("/", protect, getDepartments);
+
+router.post(
+    "/",
+    protect,
+    authorize("admin", "leader"),
+    createDepartment
+);
 
 router.post(
     "/assign",
@@ -28,7 +56,11 @@ router.post(
     assignMemberToDepartment
 );
 
-router.get("/member/:memberId", protect, getMemberDepartments);
+router.get(
+    "/member/:memberId",
+    protect,
+    getMemberDepartments
+);
 
 router.delete(
     "/member/:memberId/:departmentId",
@@ -42,14 +74,14 @@ router.get("/:id", protect, getDepartmentById);
 router.put(
     "/:id",
     protect,
-    authorize("admin"),
+    authorize("admin", "leader"),
     updateDepartment
 );
 
 router.delete(
     "/:id",
     protect,
-    authorize("admin"),
+    authorize("admin", "leader"),
     deleteDepartment
 );
 

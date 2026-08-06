@@ -1,17 +1,18 @@
 import { NavLink, Outlet } from "react-router-dom";
 import {
-    FaChartPie,
     FaUsers,
     FaUserPlus,
-    FaLayerGroup,
     FaClipboardCheck,
     FaCalendarAlt,
     FaBullhorn,
     FaHandHoldingUsd,
     FaHeart,
     FaTasks,
-    FaFileAlt,
-    FaSignOutAlt
+    FaSignOutAlt,
+    FaUserShield,
+    FaChartPie,
+    FaLayerGroup,
+    FaFileAlt
 } from "react-icons/fa";
 
 import { useAuth } from "../context/AuthContext";
@@ -21,6 +22,76 @@ import SdaFooter from "../components/SdaFooter";
 const AppLayout = () => {
     const { user, logout } = useAuth();
 
+    const role = user?.role || "admin";
+
+    const navItems = [
+        {
+            path: "/dashboard",
+            label: "Dashboard",
+            icon: <FaChartPie />
+        },
+        {
+            path: "/members",
+            label: "Members",
+            icon: <FaUsers />
+        },
+        {
+            path: "/visitors",
+            label: "Visitors",
+            icon: <FaUserPlus />
+        },
+        {
+            path: "/departments",
+            label: "Departments",
+            icon: <FaLayerGroup />
+        },
+        {
+            path: "/attendance",
+            label: "Attendance",
+            icon: <FaClipboardCheck />
+        },
+        {
+            path: "/events",
+            label: "Events",
+            icon: <FaCalendarAlt />
+        },
+        {
+            path: "/announcements",
+            label: "Announcements",
+            icon: <FaBullhorn />
+        },
+        {
+            path: "/contributions",
+            label: "Tithes & Offerings",
+            icon: <FaHandHoldingUsd />
+        },
+        {
+            path: "/care",
+            label: "Care Follow-ups",
+            icon: <FaHeart />
+        },
+        {
+            path: "/tasks",
+            label: "Tasks",
+            icon: <FaTasks />
+        },
+        {
+            path: "/reports",
+            label: "Reports",
+            icon: <FaFileAlt />
+        }
+    ];
+
+    const adminItems = [
+        {
+            path: "/users",
+            label: "Users",
+            icon: <FaUserShield />
+        }
+    ];
+
+    const visibleNavItems = role === "admin" ? [...navItems, ...adminItems] : navItems;
+
     return (
         <div className="app-layout">
             <aside className="sidebar">
@@ -29,65 +100,17 @@ const AppLayout = () => {
 
                     <div className="user-pill">
                         <span>{user?.full_name || "Admin User"}</span>
-                        <small>{user?.role || "admin"}</small>
+                        <small>{role}</small>
                     </div>
                 </div>
 
                 <nav className="sidebar-nav">
-                    <NavLink to="/dashboard">
-                        <FaChartPie />
-                        <span>Dashboard</span>
-                    </NavLink>
-
-                    <NavLink to="/members">
-                        <FaUsers />
-                        <span>Members</span>
-                    </NavLink>
-
-                    <NavLink to="/visitors">
-                        <FaUserPlus />
-                        <span>Visitors</span>
-                    </NavLink>
-
-                    <NavLink to="/departments">
-                        <FaLayerGroup />
-                        <span>Departments</span>
-                    </NavLink>
-
-                    <NavLink to="/attendance">
-                        <FaClipboardCheck />
-                        <span>Attendance</span>
-                    </NavLink>
-
-                    <NavLink to="/events">
-                        <FaCalendarAlt />
-                        <span>Events</span>
-                    </NavLink>
-
-                    <NavLink to="/announcements">
-                        <FaBullhorn />
-                        <span>Announcements</span>
-                    </NavLink>
-
-                    <NavLink to="/contributions">
-                        <FaHandHoldingUsd />
-                        <span>Contributions</span>
-                    </NavLink>
-
-                    <NavLink to="/care">
-                        <FaHeart />
-                        <span>Care Follow-ups</span>
-                    </NavLink>
-
-                    <NavLink to="/tasks">
-                        <FaTasks />
-                        <span>Tasks</span>
-                    </NavLink>
-
-                    <NavLink to="/reports">
-                        <FaFileAlt />
-                        <span>Reports</span>
-                    </NavLink>
+                    {visibleNavItems.map((item) => (
+                        <NavLink key={item.path} to={item.path}>
+                            {item.icon}
+                            <span>{item.label}</span>
+                        </NavLink>
+                    ))}
                 </nav>
 
                 <div className="sidebar-bottom">

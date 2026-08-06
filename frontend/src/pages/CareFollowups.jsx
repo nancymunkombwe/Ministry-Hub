@@ -6,55 +6,82 @@ import {
     FaEdit,
     FaTimes,
     FaSave,
-    FaHeart,
-    FaTrash
+    FaTrash,
+    FaBullhorn,
+    FaWhatsapp,
+    FaCopy,
+    FaCheckCircle
 } from "react-icons/fa";
 
 import API from "../api/api";
+import { useAuth } from "../context/AuthContext";
+import {
+    canManageAnnouncements,
+    getNoPermissionMessage
+} from "../utils/permissions";
 
 const emptyForm = {
-    member_id: "",
-    reason: "Missed Services",
-    description: "",
-    assigned_to: "",
-    due_date: "",
-    status: "Pending"
+    title: "",
+    message: "",
+    audience: "All Members",
+    announcement_date: "",
+    priority: "Normal",
+    status: "Published"
 };
 
-const CareFollowups = () => {
-    const [careItems, setCareItems] = useState([]);
-    const [members, setMembers] = useState([]);
+const Announcements = () => {
+    const { user } = useAuth();
+
+    const role = user?.role || "admin";
+    const canEditAnnouncements = canManageAnnouncements(role);
+
+    const [announcements, setAnnouncements] = useState([]);
 
     const [formData, setFormData] = useState(emptyForm);
     const [searchTerm, setSearchTerm] = useState("");
     const [editingId, setEditingId] = useState(null);
-    const [showForm, setShowForm] = useState(false);
 
-    const [careToDelete, setCareToDelete] = useState(null);
-    const [deleting, setDeleting] = useState(false);
+    const [showForm, setShowForm] = useState(false);
+    const [announcementToDelete, setAnnouncementToDelete] = useState(null);
+
+    const [whatsappMessage, setWhatsappMessage] = useState("");
+    const [showWhatsappModal, setShowWhatsappModal] = useState(false);
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [loadingWhatsapp, setLoadingWhatsapp] = useState(false);
+
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
 
-    const getCareId = (item) => {
-        return item.id || item.care_followup_id || item.followup_id;
+    const scrollToForm = () => {
+        setTimeout(() => {
+            const formCard = document.querySelector(".form-card");
+
+            if (formCard) {
+                formCard.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start"
+                });
+            }
+        }, 100);
     };
 
-    const getMemberId = (member) => {
-        return member.id || member.member_id;
+    const getAnnouncementId = (announcement) => {
+        return announcement.id || announcement.announcement_id;
     };
 
-    const getMemberName = (member) => {
-        return `${member.first_name || ""} ${member.last_name || ""}`.trim();
+    const getAnnouncementMessage = (announcement) => {
+        return announcement.message || announcement.content || announcement.body || "";
     };
 
-    const getCareMemberName = (item) => {
+    const getAnnouncementAudience = (announcement) => {
         return (
-            item.member_name ||
-            `${item.first_name || ""} ${item.last_name || ""}`.trim() ||
-            "Member"
+            announcement.audience ||
+            announcement.target_audience ||
+            announcement.department_name ||
+            "All Members"
         );
     };
 
@@ -63,33 +90,25 @@ const CareFollowups = () => {
         return String(dateValue).split("T")[0];
     };
 
-    const fetchData = async () => {
+    const fetchAnnouncements = async () => {
         setLoading(true);
         setError("");
 
         try {
-            const [careResponse, membersResponse] = await Promise.all([
-                API.get("/care"),
-                API.get("/members")
-            ]);
+            const response = await API.get("/announcements");
 
-            const careList =
-                careResponse.data.care_followups ||
-                careResponse.data.followups ||
-                careResponse.data.data ||
-                careResponse.data;
+            const announcementList =
+                response.data.announcements ||
+                response.data.data ||
+                response.data;
 
-            const memberList =
-                membersResponse.data.members ||
-                membersResponse.data.data ||
-                membersResponse.data;
-
-            setCareItems(Array.isArray(careList) ? careList : []);
-            setMembers(Array.isArray(memberList) ? memberList : []);
+            setAnnouncements(
+                Array.isArray(announcementList) ? announcementList : []
+            );
         } catch (error) {
             setError(
                 error.response?.data?.message ||
-                    "Failed to load care follow-ups. Please check if the backend is running."
+                    "Failed to load announcements. Please check if the backend is running."
             );
         } finally {
             setLoading(false);
@@ -97,22 +116,35 @@ const CareFollowups = () => {
     };
 
     useEffect(() => {
-        fetchData();
+        fetchAnnouncements();
     }, []);
 
-    const filteredCareItems = useMemo(() => {
-        return careItems.filter((item) => {
+    const filteredAnnouncements = useMemo(() => {
+        return announcements.filter((announcement) => {
             const searchableText = `
-                ${getCareMemberName(item)}
-                ${item.reason || ""}
-                ${item.status || ""}
-                ${item.description || ""}
-                ${item.due_date || ""}
+                ${announcement.title || ""}
+                ${getAnnouncementMessage(announcement)}
+                ${getAnnouncementAudience(announcement)}
+                ${announcement.priority || ""}
+                ${announcement.status || ""}
+                ${announcement.announcement_date || ""}
             `.toLowerCase();
 
             return searchableText.includes(searchTerm.toLowerCase());
         });
-    }, [careItems, searchTerm]);
+    }, [announcements, searchTerm]);
+
+    const publishedCount = announcements.filter(
+        (announcement) => (announcement.status || "Published") === "Published"
+    ).length;
+
+    const draftCount = announcements.filter(
+        (announcement) => announcement.status === "Draft"
+    ).length;
+
+    const urgentCount = announcements.filter(
+        (announcement) => announcement.priority === "Urgent"
+    ).length;
 
     const handleChange = (event) => {
         const { name, value } = event.target;
@@ -124,11 +156,17 @@ const CareFollowups = () => {
     };
 
     const openAddForm = () => {
+        if (!canEditAnnouncements) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setFormData(emptyForm);
         setEditingId(null);
         setShowForm(true);
         setError("");
         setSuccess("");
+        scrollToForm();
     };
 
     const resetForm = () => {
@@ -141,128 +179,211 @@ const CareFollowups = () => {
     const handleSubmit = async (event) => {
         event.preventDefault();
 
+        if (!canEditAnnouncements) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setSaving(true);
         setError("");
         setSuccess("");
 
-        if (!formData.member_id || !formData.reason || !formData.status) {
-            setError("Member, reason, and status are required.");
+        if (!formData.title.trim() || !formData.message.trim()) {
+            setError("Title and message are required.");
             setSaving(false);
             return;
         }
 
         try {
             const payload = {
-                member_id: formData.member_id,
-                reason: formData.reason,
-                description: formData.description,
-                assigned_to: formData.assigned_to || null,
-                status: formData.status,
-                due_date: formData.due_date || null
+                title: formData.title,
+                message: formData.message,
+                content: formData.message,
+                body: formData.message,
+                audience: formData.audience,
+                target_audience: formData.audience,
+                announcement_date: formData.announcement_date || null,
+                priority: formData.priority,
+                status: formData.status
             };
 
             if (editingId) {
-                await API.put(`/care/${editingId}`, payload);
-                setSuccess("Care follow-up updated successfully.");
+                await API.put(`/announcements/${editingId}`, payload);
+                setSuccess("Announcement updated successfully.");
             } else {
-                await API.post("/care", payload);
-                setSuccess("Care follow-up added successfully.");
+                await API.post("/announcements", payload);
+                setSuccess("Announcement created successfully.");
             }
 
             resetForm();
-            await fetchData();
+            await fetchAnnouncements();
         } catch (error) {
             setError(
                 error.response?.data?.message ||
-                    "Failed to save care follow-up. Please try again."
+                    "Failed to save announcement. Please try again."
             );
         } finally {
             setSaving(false);
         }
     };
 
-    const openDeleteModal = (item) => {
-        setCareToDelete(item);
+    const handleEdit = (announcement) => {
+        if (!canEditAnnouncements) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
+        setEditingId(getAnnouncementId(announcement));
+
+        setFormData({
+            title: announcement.title || "",
+            message: getAnnouncementMessage(announcement),
+            audience: getAnnouncementAudience(announcement),
+            announcement_date: formatDate(announcement.announcement_date),
+            priority: announcement.priority || "Normal",
+            status: announcement.status || "Published"
+        });
+
+        setShowForm(true);
+        setError("");
+        setSuccess("");
+        scrollToForm();
+    };
+
+    const openDeleteModal = (announcement) => {
+        if (!canEditAnnouncements) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
+        setAnnouncementToDelete(announcement);
         setError("");
         setSuccess("");
     };
 
     const closeDeleteModal = () => {
-        setCareToDelete(null);
+        setAnnouncementToDelete(null);
     };
 
     const confirmDelete = async () => {
-        if (!careToDelete) {
+        if (!canEditAnnouncements) {
+            setError(getNoPermissionMessage());
             return;
         }
+
+        if (!announcementToDelete) return;
+
+        const announcementId = getAnnouncementId(announcementToDelete);
 
         setDeleting(true);
         setError("");
         setSuccess("");
 
         try {
-            await API.delete(`/care/${getCareId(careToDelete)}`);
-            setSuccess("Care follow-up deleted successfully.");
-            setCareToDelete(null);
-            await fetchData();
+            await API.delete(`/announcements/${announcementId}`);
+
+            setAnnouncements((previousAnnouncements) =>
+                previousAnnouncements.filter(
+                    (announcement) =>
+                        String(getAnnouncementId(announcement)) !==
+                        String(announcementId)
+                )
+            );
+
+            setSuccess("Announcement deleted successfully.");
+            setAnnouncementToDelete(null);
         } catch (error) {
             setError(
                 error.response?.data?.message ||
-                    "Failed to delete care follow-up. Please try again."
+                    "Failed to delete announcement. Please try again."
             );
         } finally {
             setDeleting(false);
         }
     };
 
-    const handleEdit = (item) => {
-        setEditingId(getCareId(item));
+    const generateWhatsappMessage = async (announcement) => {
+        const announcementId = getAnnouncementId(announcement);
 
-        setFormData({
-            member_id: item.member_id || "",
-            reason: item.reason || "Missed Services",
-            description: item.description || "",
-            assigned_to: item.assigned_to || "",
-            due_date: formatDate(item.due_date),
-            status: item.status || "Pending"
-        });
-
-        setShowForm(true);
-        setSuccess("");
+        setLoadingWhatsapp(true);
         setError("");
+        setSuccess("");
 
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        try {
+            const response = await API.get(
+                `/announcements/${announcementId}/whatsapp`
+            );
+
+            const generatedMessage =
+                response.data.whatsapp_message ||
+                response.data.whatsappMessage ||
+                response.data.message ||
+                response.data.text ||
+                `*${announcement.title}*\n\n${getAnnouncementMessage(announcement)}`;
+
+            setWhatsappMessage(generatedMessage);
+            setShowWhatsappModal(true);
+        } catch {
+            const fallbackMessage = `*${announcement.title}*\n\n${getAnnouncementMessage(
+                announcement
+            )}`;
+
+            setWhatsappMessage(fallbackMessage);
+            setShowWhatsappModal(true);
+        } finally {
+            setLoadingWhatsapp(false);
+        }
+    };
+
+    const copyWhatsappMessage = async () => {
+        try {
+            await navigator.clipboard.writeText(whatsappMessage);
+            setSuccess("WhatsApp message copied successfully.");
+        } catch {
+            setError("Failed to copy message. Please copy it manually.");
+        }
     };
 
     return (
         <div className="page page-fade">
             <div className="page-header page-header-row">
                 <div>
-                    <span className="eyebrow">Care Ministry</span>
-                    <h1>Care Follow-ups</h1>
-                    <p>Track members needing visitation, prayer, or support.</p>
+                    <span className="eyebrow">Church Communication</span>
+                    <h1>Announcements</h1>
+                    <p>
+                        Create church announcements and generate WhatsApp-ready
+                        messages.
+                    </p>
                 </div>
 
-                <button className="primary-btn" onClick={openAddForm}>
-                    <FaPlus /> Add Follow-up
-                </button>
+                {canEditAnnouncements && (
+                    <button className="primary-btn" onClick={openAddForm}>
+                        <FaPlus /> Add Announcement
+                    </button>
+                )}
             </div>
+
+            {!canEditAnnouncements && (
+                <div className="info-message">
+                    {getNoPermissionMessage()}
+                </div>
+            )}
 
             {error && <div className="page-error">{error}</div>}
             {success && <div className="success-message">{success}</div>}
 
-            {careToDelete && (
+            {announcementToDelete && (
                 <div className="modal-overlay">
                     <div className="delete-modal">
                         <div className="delete-modal-icon">
                             <FaTrash />
                         </div>
 
-                        <h2>Delete Care Follow-up?</h2>
+                        <h2>Delete Announcement?</h2>
 
                         <p>
-                            Are you sure you want to delete this care follow-up
-                            for <strong>{getCareMemberName(careToDelete)}</strong>?
+                            Are you sure you want to delete{" "}
+                            <strong>{announcementToDelete.title}</strong>?
                         </p>
 
                         <p className="delete-warning">
@@ -290,18 +411,87 @@ const CareFollowups = () => {
                 </div>
             )}
 
-            {showForm && (
+            {showWhatsappModal && (
+                <div className="modal-overlay">
+                    <div className="delete-modal">
+                        <div className="delete-modal-icon">
+                            <FaWhatsapp />
+                        </div>
+
+                        <h2>WhatsApp Message</h2>
+
+                        <textarea
+                            className="copy-textarea"
+                            rows="8"
+                            value={whatsappMessage}
+                            onChange={(event) =>
+                                setWhatsappMessage(event.target.value)
+                            }
+                        ></textarea>
+
+                        <div className="delete-modal-actions">
+                            <button
+                                className="secondary-btn"
+                                onClick={() => setShowWhatsappModal(false)}
+                            >
+                                Close
+                            </button>
+
+                            <button
+                                className="primary-btn"
+                                onClick={copyWhatsappMessage}
+                            >
+                                <FaCopy /> Copy Message
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className="dashboard-grid">
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaBullhorn />
+                    </div>
+                    <h3>Total Announcements</h3>
+                    <p>{announcements.length}</p>
+                </div>
+
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaCheckCircle />
+                    </div>
+                    <h3>Published</h3>
+                    <p>{publishedCount}</p>
+                </div>
+
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaEdit />
+                    </div>
+                    <h3>Drafts</h3>
+                    <p>{draftCount}</p>
+                </div>
+
+                <div className="stat-card warning">
+                    <div className="stat-icon">
+                        <FaBullhorn />
+                    </div>
+                    <h3>Urgent</h3>
+                    <p>{urgentCount}</p>
+                </div>
+            </div>
+
+            {showForm && canEditAnnouncements && (
                 <div className="form-card">
                     <div className="section-header">
                         <div>
                             <h2>
                                 {editingId
-                                    ? "Edit Care Follow-up"
-                                    : "Add Care Follow-up"}
+                                    ? "Edit Announcement"
+                                    : "Add New Announcement"}
                             </h2>
-                            <p>
-                                Record care, visitation, prayer, or follow-up work.
-                            </p>
+                            <p>Enter announcement details below.</p>
                         </div>
 
                         <button className="icon-btn" onClick={resetForm}>
@@ -312,61 +502,54 @@ const CareFollowups = () => {
                     <form onSubmit={handleSubmit}>
                         <div className="form-grid">
                             <div>
-                                <label>Member</label>
-                                <select
-                                    name="member_id"
-                                    value={formData.member_id}
-                                    onChange={handleChange}
-                                >
-                                    <option value="">Select member</option>
-
-                                    {members.map((member) => (
-                                        <option
-                                            key={getMemberId(member)}
-                                            value={getMemberId(member)}
-                                        >
-                                            {getMemberName(member)}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label>Reason</label>
-                                <select
-                                    name="reason"
-                                    value={formData.reason}
-                                    onChange={handleChange}
-                                >
-                                    <option value="Missed Services">Missed Services</option>
-                                    <option value="Sick Member">Sick Member</option>
-                                    <option value="Visitation">Visitation</option>
-                                    <option value="New Convert">New Convert</option>
-                                    <option value="Prayer Request">Prayer Request</option>
-                                    <option value="Bereavement">Bereavement</option>
-                                    <option value="Counselling">Counselling</option>
-                                    <option value="Other">Other</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label>Assigned To User ID</label>
+                                <label>Title</label>
                                 <input
-                                    name="assigned_to"
-                                    value={formData.assigned_to}
+                                    name="title"
+                                    value={formData.title}
                                     onChange={handleChange}
-                                    placeholder="Optional"
+                                    placeholder="e.g. Sabbath Program Notice"
                                 />
                             </div>
 
                             <div>
-                                <label>Follow-up Date</label>
+                                <label>Audience</label>
+                                <select
+                                    name="audience"
+                                    value={formData.audience}
+                                    onChange={handleChange}
+                                >
+                                    <option value="All Members">All Members</option>
+                                    <option value="Youth Ministry">Youth Ministry</option>
+                                    <option value="Women Ministry">Women Ministry</option>
+                                    <option value="Men Ministry">Men Ministry</option>
+                                    <option value="Pathfinders">Pathfinders</option>
+                                    <option value="Leaders Only">Leaders Only</option>
+                                    <option value="Visitors">Visitors</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label>Date</label>
                                 <input
-                                    name="due_date"
+                                    name="announcement_date"
                                     type="date"
-                                    value={formData.due_date}
+                                    value={formData.announcement_date}
                                     onChange={handleChange}
                                 />
+                            </div>
+
+                            <div>
+                                <label>Priority</label>
+                                <select
+                                    name="priority"
+                                    value={formData.priority}
+                                    onChange={handleChange}
+                                >
+                                    <option value="Low">Low</option>
+                                    <option value="Normal">Normal</option>
+                                    <option value="High">High</option>
+                                    <option value="Urgent">Urgent</option>
+                                </select>
                             </div>
 
                             <div>
@@ -376,20 +559,19 @@ const CareFollowups = () => {
                                     value={formData.status}
                                     onChange={handleChange}
                                 >
-                                    <option value="Pending">Pending</option>
-                                    <option value="In Progress">In Progress</option>
-                                    <option value="Completed">Completed</option>
+                                    <option value="Published">Published</option>
+                                    <option value="Draft">Draft</option>
                                 </select>
                             </div>
 
                             <div className="full-width">
-                                <label>Description</label>
+                                <label>Message</label>
                                 <textarea
-                                    name="description"
-                                    value={formData.description}
+                                    name="message"
+                                    value={formData.message}
                                     onChange={handleChange}
-                                    rows="3"
-                                    placeholder="Describe the follow-up"
+                                    rows="4"
+                                    placeholder="Write announcement message"
                                 ></textarea>
                             </div>
                         </div>
@@ -412,8 +594,8 @@ const CareFollowups = () => {
                                 {saving
                                     ? "Saving..."
                                     : editingId
-                                    ? "Update Follow-up"
-                                    : "Save Follow-up"}
+                                    ? "Update Announcement"
+                                    : "Save Announcement"}
                             </button>
                         </div>
                     </form>
@@ -423,8 +605,8 @@ const CareFollowups = () => {
             <div className="table-card">
                 <div className="table-toolbar">
                     <div>
-                        <h2>Care Follow-up Records</h2>
-                        <p>{filteredCareItems.length} record(s) found</p>
+                        <h2>Church Announcements</h2>
+                        <p>{filteredAnnouncements.length} announcement(s) found</p>
                     </div>
 
                     <div className="toolbar-actions">
@@ -435,75 +617,115 @@ const CareFollowups = () => {
                                 onChange={(event) =>
                                     setSearchTerm(event.target.value)
                                 }
-                                placeholder="Search care records..."
+                                placeholder="Search announcements..."
                             />
                         </div>
 
-                        <button className="secondary-btn" onClick={fetchData}>
+                        <button
+                            className="secondary-btn"
+                            onClick={fetchAnnouncements}
+                        >
                             <FaSyncAlt /> Refresh
                         </button>
                     </div>
                 </div>
 
                 {loading ? (
-                    <div className="loading-box">Loading care follow-ups...</div>
-                ) : filteredCareItems.length === 0 ? (
+                    <div className="loading-box">Loading announcements...</div>
+                ) : filteredAnnouncements.length === 0 ? (
                     <div className="empty-state">
-                        <FaHeart />
-                        <h3>No care follow-ups found</h3>
-                        <p>Add a care follow-up record to get started.</p>
+                        <FaBullhorn />
+                        <h3>No announcements found</h3>
+                        <p>Add an announcement to get started.</p>
                     </div>
                 ) : (
                     <div className="table-wrapper">
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>Member</th>
-                                    <th>Reason</th>
+                                    <th>Announcement</th>
+                                    <th>Audience</th>
+                                    <th>Date</th>
+                                    <th>Priority</th>
                                     <th>Status</th>
-                                    <th>Follow-up Date</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
 
                             <tbody>
-                                {filteredCareItems.map((item) => (
-                                    <tr key={getCareId(item)}>
+                                {filteredAnnouncements.map((announcement) => (
+                                    <tr key={getAnnouncementId(announcement)}>
                                         <td>
-                                            <strong>{getCareMemberName(item)}</strong>
+                                            <strong>{announcement.title}</strong>
+                                            <br />
+                                            <small>
+                                                {getAnnouncementMessage(announcement)}
+                                            </small>
                                         </td>
 
-                                        <td>{item.reason || "-"}</td>
+                                        <td>{getAnnouncementAudience(announcement)}</td>
+
+                                        <td>
+                                            {formatDate(
+                                                announcement.announcement_date
+                                            ) || "-"}
+                                        </td>
+
+                                        <td>
+                                            <span className="status-badge">
+                                                {announcement.priority || "Normal"}
+                                            </span>
+                                        </td>
 
                                         <td>
                                             <span
                                                 className={`status-badge ${
-                                                    item.status || "Pending"
+                                                    announcement.status || "Published"
                                                 }`}
                                             >
-                                                {item.status || "Pending"}
+                                                {announcement.status || "Published"}
                                             </span>
                                         </td>
-
-                                        <td>{formatDate(item.due_date) || "-"}</td>
 
                                         <td>
                                             <div className="table-actions-inline">
                                                 <button
                                                     className="table-action-btn"
-                                                    onClick={() => handleEdit(item)}
+                                                    onClick={() =>
+                                                        generateWhatsappMessage(
+                                                            announcement
+                                                        )
+                                                    }
+                                                    disabled={loadingWhatsapp}
                                                 >
-                                                    <FaEdit /> Edit
+                                                    <FaWhatsapp /> WhatsApp
                                                 </button>
 
-                                                <button
-                                                    className="table-delete-btn"
-                                                    onClick={() =>
-                                                        openDeleteModal(item)
-                                                    }
-                                                >
-                                                    <FaTrash /> Delete
-                                                </button>
+                                                {canEditAnnouncements && (
+                                                    <>
+                                                        <button
+                                                            className="table-action-btn"
+                                                            onClick={() =>
+                                                                handleEdit(
+                                                                    announcement
+                                                                )
+                                                            }
+                                                        >
+                                                            <FaEdit /> Edit
+                                                        </button>
+
+                                                        <button
+                                                            className="table-delete-btn"
+                                                            onClick={() =>
+                                                                openDeleteModal(
+                                                                    announcement
+                                                                )
+                                                            }
+                                                        >
+                                                            <FaTrash /> Delete
+                                                        </button>
+                                                    </>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -517,4 +739,4 @@ const CareFollowups = () => {
     );
 };
 
-export default CareFollowups;
+export default Announcements;

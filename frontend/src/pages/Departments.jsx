@@ -6,39 +6,76 @@ import {
     FaEdit,
     FaTimes,
     FaSave,
+    FaTrash,
     FaLayerGroup,
-    FaTrash
+    FaUsers,
+    FaUserCheck
 } from "react-icons/fa";
 
 import API from "../api/api";
+import { useAuth } from "../context/AuthContext";
+import {
+    canManageDepartments,
+    getNoPermissionMessage
+} from "../utils/permissions";
 
 const emptyForm = {
-    name: "",
-    description: ""
+    department_name: "",
+    description: "",
+    leader_name: "",
+    status: "Active"
 };
 
 const Departments = () => {
+    const { user } = useAuth();
+
+    const role = user?.role || "admin";
+    const canEditDepartments = canManageDepartments(role);
+
     const [departments, setDepartments] = useState([]);
 
     const [formData, setFormData] = useState(emptyForm);
     const [searchTerm, setSearchTerm] = useState("");
     const [editingId, setEditingId] = useState(null);
-    const [showForm, setShowForm] = useState(false);
 
+    const [showForm, setShowForm] = useState(false);
     const [departmentToDelete, setDepartmentToDelete] = useState(null);
-    const [deleting, setDeleting] = useState(false);
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+
+    const scrollToForm = () => {
+        setTimeout(() => {
+            const formCard = document.querySelector(".form-card");
+
+            if (formCard) {
+                formCard.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start"
+                });
+            }
+        }, 100);
+    };
 
     const getDepartmentId = (department) => {
         return department.id || department.department_id;
     };
 
     const getDepartmentName = (department) => {
-        return department.name || department.department_name || "Department";
+        return (
+            department.department_name ||
+            department.name ||
+            department.title ||
+            "Department"
+        );
+    };
+
+    const getDepartmentStatus = (department) => {
+        return department.status || "Active";
     };
 
     const fetchDepartments = async () => {
@@ -71,14 +108,24 @@ const Departments = () => {
     const filteredDepartments = useMemo(() => {
         return departments.filter((department) => {
             const searchableText = `
-                ${department.name || ""}
-                ${department.department_name || ""}
+                ${getDepartmentName(department)}
                 ${department.description || ""}
+                ${department.leader_name || ""}
+                ${department.leader || ""}
+                ${department.status || ""}
             `.toLowerCase();
 
             return searchableText.includes(searchTerm.toLowerCase());
         });
     }, [departments, searchTerm]);
+
+    const activeDepartments = departments.filter(
+        (department) => getDepartmentStatus(department) === "Active"
+    ).length;
+
+    const inactiveDepartments = departments.filter(
+        (department) => getDepartmentStatus(department) === "Inactive"
+    ).length;
 
     const handleChange = (event) => {
         const { name, value } = event.target;
@@ -90,11 +137,17 @@ const Departments = () => {
     };
 
     const openAddForm = () => {
+        if (!canEditDepartments) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setFormData(emptyForm);
         setEditingId(null);
         setShowForm(true);
         setError("");
         setSuccess("");
+        scrollToForm();
     };
 
     const resetForm = () => {
@@ -107,11 +160,16 @@ const Departments = () => {
     const handleSubmit = async (event) => {
         event.preventDefault();
 
+        if (!canEditDepartments) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setSaving(true);
         setError("");
         setSuccess("");
 
-        if (!formData.name.trim()) {
+        if (!formData.department_name.trim()) {
             setError("Department name is required.");
             setSaving(false);
             return;
@@ -119,8 +177,12 @@ const Departments = () => {
 
         try {
             const payload = {
-                name: formData.name,
-                description: formData.description
+                department_name: formData.department_name,
+                name: formData.department_name,
+                description: formData.description,
+                leader_name: formData.leader_name,
+                leader: formData.leader_name,
+                status: formData.status
             };
 
             if (editingId) {
@@ -128,7 +190,7 @@ const Departments = () => {
                 setSuccess("Department updated successfully.");
             } else {
                 await API.post("/departments", payload);
-                setSuccess("Department added successfully.");
+                setSuccess("Department created successfully.");
             }
 
             resetForm();
@@ -143,7 +205,33 @@ const Departments = () => {
         }
     };
 
+    const handleEdit = (department) => {
+        if (!canEditDepartments) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
+        setEditingId(getDepartmentId(department));
+
+        setFormData({
+            department_name: getDepartmentName(department),
+            description: department.description || "",
+            leader_name: department.leader_name || department.leader || "",
+            status: department.status || "Active"
+        });
+
+        setShowForm(true);
+        setError("");
+        setSuccess("");
+        scrollToForm();
+    };
+
     const openDeleteModal = (department) => {
+        if (!canEditDepartments) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setDepartmentToDelete(department);
         setError("");
         setSuccess("");
@@ -153,71 +241,66 @@ const Departments = () => {
         setDepartmentToDelete(null);
     };
 
-    const removeDepartmentFromTable = (departmentId) => {
-        setDepartments((previousDepartments) =>
-            previousDepartments.filter(
-                (department) =>
-                    String(getDepartmentId(department)) !== String(departmentId)
-            )
-        );
-    };
-
     const confirmDelete = async () => {
-        if (!departmentToDelete) {
+        if (!canEditDepartments) {
+            setError(getNoPermissionMessage());
             return;
         }
 
-        const deletedDepartmentId = getDepartmentId(departmentToDelete);
+        if (!departmentToDelete) return;
+
+        const departmentId = getDepartmentId(departmentToDelete);
 
         setDeleting(true);
         setError("");
         setSuccess("");
 
         try {
-            await API.delete(`/departments/${deletedDepartmentId}`);
+            await API.delete(`/departments/${departmentId}`);
 
-            removeDepartmentFromTable(deletedDepartmentId);
+            setDepartments((previousDepartments) =>
+                previousDepartments.filter(
+                    (department) =>
+                        String(getDepartmentId(department)) !== String(departmentId)
+                )
+            );
 
             setSuccess("Department deleted successfully.");
             setDepartmentToDelete(null);
         } catch (error) {
             setError(
                 error.response?.data?.message ||
-                    "Failed to delete department. Please try again."
+                    "Failed to delete department. It may have members assigned to it."
             );
         } finally {
             setDeleting(false);
         }
     };
 
-    const handleEdit = (department) => {
-        setEditingId(getDepartmentId(department));
-
-        setFormData({
-            name: getDepartmentName(department),
-            description: department.description || ""
-        });
-
-        setShowForm(true);
-        setSuccess("");
-        setError("");
-
-        window.scrollTo({ top: 0, behavior: "smooth" });
-    };
-
     return (
         <div className="page page-fade">
             <div className="page-header page-header-row">
                 <div>
-                    <span className="eyebrow">Department Management</span>
+                    <span className="eyebrow">Church Organization</span>
                     <h1>Departments</h1>
-                    <p>Create and manage church departments and ministries.</p>
+                    <p>
+                        Manage church departments such as Youth, Music, Sabbath
+                        School, and Pathfinders.
+                    </p>
                 </div>
 
-                <button className="primary-btn" onClick={openAddForm}>
-                    <FaPlus /> Add Department
-                </button>
+                {canEditDepartments && (
+                    <button className="primary-btn" onClick={openAddForm}>
+                        <FaPlus /> Add Department
+                    </button>
+                )}
             </div>
+
+            {!canEditDepartments && (
+                <div className="info-message">
+                    {getNoPermissionMessage()}
+                </div>
+            )}
 
             {error && <div className="page-error">{error}</div>}
             {success && <div className="success-message">{success}</div>}
@@ -233,14 +316,11 @@ const Departments = () => {
 
                         <p>
                             Are you sure you want to delete{" "}
-                            <strong>
-                                {getDepartmentName(departmentToDelete)}
-                            </strong>
-                            ?
+                            <strong>{getDepartmentName(departmentToDelete)}</strong>?
                         </p>
 
                         <p className="delete-warning">
-                            Members assigned to this department will be unassigned first.
+                            This action cannot be undone.
                         </p>
 
                         <div className="delete-modal-actions">
@@ -272,16 +352,30 @@ const Departments = () => {
                     <h3>Total Departments</h3>
                     <p>{departments.length}</p>
                 </div>
+
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaUserCheck />
+                    </div>
+                    <h3>Active Departments</h3>
+                    <p>{activeDepartments}</p>
+                </div>
+
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaUsers />
+                    </div>
+                    <h3>Inactive Departments</h3>
+                    <p>{inactiveDepartments}</p>
+                </div>
             </div>
 
-            {showForm && (
+            {showForm && canEditDepartments && (
                 <div className="form-card">
                     <div className="section-header">
                         <div>
                             <h2>
-                                {editingId
-                                    ? "Edit Department"
-                                    : "Add New Department"}
+                                {editingId ? "Edit Department" : "Add New Department"}
                             </h2>
                             <p>Enter department details below.</p>
                         </div>
@@ -296,11 +390,33 @@ const Departments = () => {
                             <div>
                                 <label>Department Name</label>
                                 <input
-                                    name="name"
-                                    value={formData.name}
+                                    name="department_name"
+                                    value={formData.department_name}
                                     onChange={handleChange}
                                     placeholder="e.g. Youth Ministry"
                                 />
+                            </div>
+
+                            <div>
+                                <label>Leader Name</label>
+                                <input
+                                    name="leader_name"
+                                    value={formData.leader_name}
+                                    onChange={handleChange}
+                                    placeholder="e.g. Youth Leader"
+                                />
+                            </div>
+
+                            <div>
+                                <label>Status</label>
+                                <select
+                                    name="status"
+                                    value={formData.status}
+                                    onChange={handleChange}
+                                >
+                                    <option value="Active">Active</option>
+                                    <option value="Inactive">Inactive</option>
+                                </select>
                             </div>
 
                             <div className="full-width">
@@ -360,10 +476,7 @@ const Departments = () => {
                             />
                         </div>
 
-                        <button
-                            className="secondary-btn"
-                            onClick={fetchDepartments}
-                        >
+                        <button className="secondary-btn" onClick={fetchDepartments}>
                             <FaSyncAlt /> Refresh
                         </button>
                     </div>
@@ -383,8 +496,10 @@ const Departments = () => {
                             <thead>
                                 <tr>
                                     <th>Department</th>
+                                    <th>Leader</th>
+                                    <th>Status</th>
                                     <th>Description</th>
-                                    <th>Actions</th>
+                                    {canEditDepartments && <th>Actions</th>}
                                 </tr>
                             </thead>
 
@@ -397,31 +512,47 @@ const Departments = () => {
                                             </strong>
                                         </td>
 
-                                        <td>{department.description || "-"}</td>
+                                        <td>
+                                            {department.leader_name ||
+                                                department.leader ||
+                                                "-"}
+                                        </td>
 
                                         <td>
-                                            <div className="table-actions-inline">
-                                                <button
-                                                    className="table-action-btn"
-                                                    onClick={() =>
-                                                        handleEdit(department)
-                                                    }
-                                                >
-                                                    <FaEdit /> Edit
-                                                </button>
-
-                                                <button
-                                                    className="table-delete-btn"
-                                                    onClick={() =>
-                                                        openDeleteModal(
-                                                            department
-                                                        )
-                                                    }
-                                                >
-                                                    <FaTrash /> Delete
-                                                </button>
-                                            </div>
+                                            <span
+                                                className={`status-badge ${
+                                                    department.status || "Active"
+                                                }`}
+                                            >
+                                                {department.status || "Active"}
+                                            </span>
                                         </td>
+
+                                        <td>{department.description || "-"}</td>
+
+                                        {canEditDepartments && (
+                                            <td>
+                                                <div className="table-actions-inline">
+                                                    <button
+                                                        className="table-action-btn"
+                                                        onClick={() =>
+                                                            handleEdit(department)
+                                                        }
+                                                    >
+                                                        <FaEdit /> Edit
+                                                    </button>
+
+                                                    <button
+                                                        className="table-delete-btn"
+                                                        onClick={() =>
+                                                            openDeleteModal(department)
+                                                        }
+                                                    >
+                                                        <FaTrash /> Delete
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>

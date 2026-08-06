@@ -6,46 +6,83 @@ import {
     FaEdit,
     FaTimes,
     FaSave,
-    FaBullhorn,
     FaTrash,
-    FaWhatsapp
+    FaBullhorn,
+    FaWhatsapp,
+    FaCopy,
+    FaCheckCircle
 } from "react-icons/fa";
 
 import API from "../api/api";
+import { useAuth } from "../context/AuthContext";
+import {
+    canManageAnnouncements,
+    getNoPermissionMessage
+} from "../utils/permissions";
 
 const emptyForm = {
     title: "",
     message: "",
-    department_id: "",
-    target_audience: "All Members"
+    audience: "All Members",
+    announcement_date: "",
+    priority: "Normal",
+    status: "Published"
 };
 
 const Announcements = () => {
+    const { user } = useAuth();
+
+    const role = user?.role || "admin";
+    const canEditAnnouncements = canManageAnnouncements(role);
+
     const [announcements, setAnnouncements] = useState([]);
-    const [departments, setDepartments] = useState([]);
 
     const [formData, setFormData] = useState(emptyForm);
     const [searchTerm, setSearchTerm] = useState("");
     const [editingId, setEditingId] = useState(null);
-    const [showForm, setShowForm] = useState(false);
 
+    const [showForm, setShowForm] = useState(false);
     const [announcementToDelete, setAnnouncementToDelete] = useState(null);
-    const [deleting, setDeleting] = useState(false);
 
     const [whatsappMessage, setWhatsappMessage] = useState("");
-    const [showWhatsappBox, setShowWhatsappBox] = useState(false);
+    const [showWhatsappModal, setShowWhatsappModal] = useState(false);
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [loadingWhatsapp, setLoadingWhatsapp] = useState(false);
+
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+
+    const scrollToForm = () => {
+        setTimeout(() => {
+            const formCard = document.querySelector(".form-card");
+
+            if (formCard) {
+                formCard.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start"
+                });
+            }
+        }, 100);
+    };
 
     const getAnnouncementId = (announcement) => {
         return announcement.id || announcement.announcement_id;
     };
 
-    const getDepartmentId = (department) => {
-        return department.id || department.department_id;
+    const getAnnouncementMessage = (announcement) => {
+        return announcement.message || announcement.content || announcement.body || "";
+    };
+
+    const getAnnouncementAudience = (announcement) => {
+        return (
+            announcement.audience ||
+            announcement.target_audience ||
+            announcement.department_name ||
+            "All Members"
+        );
     };
 
     const formatDate = (dateValue) => {
@@ -53,36 +90,21 @@ const Announcements = () => {
         return String(dateValue).split("T")[0];
     };
 
-    const fetchData = async () => {
+    const fetchAnnouncements = async () => {
         setLoading(true);
         setError("");
 
         try {
-            const [announcementsResponse, departmentsResponse] =
-                await Promise.allSettled([
-                    API.get("/announcements"),
-                    API.get("/departments")
-                ]);
+            const response = await API.get("/announcements");
 
-            if (announcementsResponse.status === "fulfilled") {
-                const announcementList =
-                    announcementsResponse.value.data.announcements ||
-                    announcementsResponse.value.data.data ||
-                    announcementsResponse.value.data;
+            const announcementList =
+                response.data.announcements ||
+                response.data.data ||
+                response.data;
 
-                setAnnouncements(
-                    Array.isArray(announcementList) ? announcementList : []
-                );
-            }
-
-            if (departmentsResponse.status === "fulfilled") {
-                const departmentList =
-                    departmentsResponse.value.data.departments ||
-                    departmentsResponse.value.data.data ||
-                    departmentsResponse.value.data;
-
-                setDepartments(Array.isArray(departmentList) ? departmentList : []);
-            }
+            setAnnouncements(
+                Array.isArray(announcementList) ? announcementList : []
+            );
         } catch (error) {
             setError(
                 error.response?.data?.message ||
@@ -94,22 +116,35 @@ const Announcements = () => {
     };
 
     useEffect(() => {
-        fetchData();
+        fetchAnnouncements();
     }, []);
 
     const filteredAnnouncements = useMemo(() => {
         return announcements.filter((announcement) => {
             const searchableText = `
                 ${announcement.title || ""}
-                ${announcement.message || ""}
-                ${announcement.content || ""}
-                ${announcement.department_name || ""}
-                ${announcement.target_audience || ""}
+                ${getAnnouncementMessage(announcement)}
+                ${getAnnouncementAudience(announcement)}
+                ${announcement.priority || ""}
+                ${announcement.status || ""}
+                ${announcement.announcement_date || ""}
             `.toLowerCase();
 
             return searchableText.includes(searchTerm.toLowerCase());
         });
     }, [announcements, searchTerm]);
+
+    const publishedCount = announcements.filter(
+        (announcement) => (announcement.status || "Published") === "Published"
+    ).length;
+
+    const draftCount = announcements.filter(
+        (announcement) => announcement.status === "Draft"
+    ).length;
+
+    const urgentCount = announcements.filter(
+        (announcement) => announcement.priority === "Urgent"
+    ).length;
 
     const handleChange = (event) => {
         const { name, value } = event.target;
@@ -121,11 +156,17 @@ const Announcements = () => {
     };
 
     const openAddForm = () => {
+        if (!canEditAnnouncements) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setFormData(emptyForm);
         setEditingId(null);
         setShowForm(true);
         setError("");
         setSuccess("");
+        scrollToForm();
     };
 
     const resetForm = () => {
@@ -138,12 +179,17 @@ const Announcements = () => {
     const handleSubmit = async (event) => {
         event.preventDefault();
 
+        if (!canEditAnnouncements) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setSaving(true);
         setError("");
         setSuccess("");
 
         if (!formData.title.trim() || !formData.message.trim()) {
-            setError("Announcement title and message are required.");
+            setError("Title and message are required.");
             setSaving(false);
             return;
         }
@@ -153,8 +199,12 @@ const Announcements = () => {
                 title: formData.title,
                 message: formData.message,
                 content: formData.message,
-                department_id: formData.department_id || null,
-                target_audience: formData.target_audience
+                body: formData.message,
+                audience: formData.audience,
+                target_audience: formData.audience,
+                announcement_date: formData.announcement_date || null,
+                priority: formData.priority,
+                status: formData.status
             };
 
             if (editingId) {
@@ -162,11 +212,11 @@ const Announcements = () => {
                 setSuccess("Announcement updated successfully.");
             } else {
                 await API.post("/announcements", payload);
-                setSuccess("Announcement added successfully.");
+                setSuccess("Announcement created successfully.");
             }
 
             resetForm();
-            await fetchData();
+            await fetchAnnouncements();
         } catch (error) {
             setError(
                 error.response?.data?.message ||
@@ -177,7 +227,35 @@ const Announcements = () => {
         }
     };
 
+    const handleEdit = (announcement) => {
+        if (!canEditAnnouncements) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
+        setEditingId(getAnnouncementId(announcement));
+
+        setFormData({
+            title: announcement.title || "",
+            message: getAnnouncementMessage(announcement),
+            audience: getAnnouncementAudience(announcement),
+            announcement_date: formatDate(announcement.announcement_date),
+            priority: announcement.priority || "Normal",
+            status: announcement.status || "Published"
+        });
+
+        setShowForm(true);
+        setError("");
+        setSuccess("");
+        scrollToForm();
+    };
+
     const openDeleteModal = (announcement) => {
+        if (!canEditAnnouncements) {
+            setError(getNoPermissionMessage());
+            return;
+        }
+
         setAnnouncementToDelete(announcement);
         setError("");
         setSuccess("");
@@ -188,22 +266,32 @@ const Announcements = () => {
     };
 
     const confirmDelete = async () => {
-        if (!announcementToDelete) {
+        if (!canEditAnnouncements) {
+            setError(getNoPermissionMessage());
             return;
         }
+
+        if (!announcementToDelete) return;
+
+        const announcementId = getAnnouncementId(announcementToDelete);
 
         setDeleting(true);
         setError("");
         setSuccess("");
 
         try {
-            await API.delete(
-                `/announcements/${getAnnouncementId(announcementToDelete)}`
+            await API.delete(`/announcements/${announcementId}`);
+
+            setAnnouncements((previousAnnouncements) =>
+                previousAnnouncements.filter(
+                    (announcement) =>
+                        String(getAnnouncementId(announcement)) !==
+                        String(announcementId)
+                )
             );
 
             setSuccess("Announcement deleted successfully.");
             setAnnouncementToDelete(null);
-            await fetchData();
         } catch (error) {
             setError(
                 error.response?.data?.message ||
@@ -214,47 +302,36 @@ const Announcements = () => {
         }
     };
 
-    const handleEdit = (announcement) => {
-        setEditingId(getAnnouncementId(announcement));
+    const generateWhatsappMessage = async (announcement) => {
+        const announcementId = getAnnouncementId(announcement);
 
-        setFormData({
-            title: announcement.title || "",
-            message: announcement.message || announcement.content || "",
-            department_id: announcement.department_id || "",
-            target_audience: announcement.target_audience || "All Members"
-        });
-
-        setShowForm(true);
-        setSuccess("");
-        setError("");
-
-        window.scrollTo({ top: 0, behavior: "smooth" });
-    };
-
-    const getWhatsappMessage = async (announcement) => {
+        setLoadingWhatsapp(true);
         setError("");
         setSuccess("");
-        setWhatsappMessage("");
 
         try {
             const response = await API.get(
-                `/announcements/${getAnnouncementId(announcement)}/whatsapp`
+                `/announcements/${announcementId}/whatsapp`
             );
 
-            const message =
+            const generatedMessage =
                 response.data.whatsapp_message ||
                 response.data.whatsappMessage ||
                 response.data.message ||
-                response.data.data ||
-                "";
+                response.data.text ||
+                `*${announcement.title}*\n\n${getAnnouncementMessage(announcement)}`;
 
-            setWhatsappMessage(message);
-            setShowWhatsappBox(true);
-        } catch (error) {
-            setError(
-                error.response?.data?.message ||
-                    "Failed to generate WhatsApp message."
-            );
+            setWhatsappMessage(generatedMessage);
+            setShowWhatsappModal(true);
+        } catch {
+            const fallbackMessage = `*${announcement.title}*\n\n${getAnnouncementMessage(
+                announcement
+            )}`;
+
+            setWhatsappMessage(fallbackMessage);
+            setShowWhatsappModal(true);
+        } finally {
+            setLoadingWhatsapp(false);
         }
     };
 
@@ -273,13 +350,24 @@ const Announcements = () => {
                 <div>
                     <span className="eyebrow">Church Communication</span>
                     <h1>Announcements</h1>
-                    <p>Create and share church announcements with members.</p>
+                    <p>
+                        Create church announcements and generate WhatsApp-ready
+                        messages.
+                    </p>
                 </div>
 
-                <button className="primary-btn" onClick={openAddForm}>
-                    <FaPlus /> Add Announcement
-                </button>
+                {canEditAnnouncements && (
+                    <button className="primary-btn" onClick={openAddForm}>
+                        <FaPlus /> Add Announcement
+                    </button>
+                )}
             </div>
+
+            {!canEditAnnouncements && (
+                <div className="info-message">
+                    {getNoPermissionMessage()}
+                </div>
+            )}
 
             {error && <div className="page-error">{error}</div>}
             {success && <div className="success-message">{success}</div>}
@@ -323,43 +411,78 @@ const Announcements = () => {
                 </div>
             )}
 
-            {showWhatsappBox && (
-                <div className="form-card">
-                    <div className="section-header">
-                        <div>
-                            <h2>
-                                <FaWhatsapp /> WhatsApp Message
-                            </h2>
-                            <p>Copy and paste this message into WhatsApp.</p>
+            {showWhatsappModal && (
+                <div className="modal-overlay">
+                    <div className="delete-modal">
+                        <div className="delete-modal-icon">
+                            <FaWhatsapp />
                         </div>
 
-                        <button
-                            className="icon-btn"
-                            onClick={() => setShowWhatsappBox(false)}
-                        >
-                            <FaTimes />
-                        </button>
-                    </div>
+                        <h2>WhatsApp Message</h2>
 
-                    <textarea
-                        value={whatsappMessage}
-                        readOnly
-                        rows="7"
-                        className="full-width"
-                    ></textarea>
+                        <textarea
+                            className="copy-textarea"
+                            rows="8"
+                            value={whatsappMessage}
+                            onChange={(event) =>
+                                setWhatsappMessage(event.target.value)
+                            }
+                        ></textarea>
 
-                    <div className="form-actions">
-                        <button
-                            className="primary-btn"
-                            onClick={copyWhatsappMessage}
-                        >
-                            <FaWhatsapp /> Copy Message
-                        </button>
+                        <div className="delete-modal-actions">
+                            <button
+                                className="secondary-btn"
+                                onClick={() => setShowWhatsappModal(false)}
+                            >
+                                Close
+                            </button>
+
+                            <button
+                                className="primary-btn"
+                                onClick={copyWhatsappMessage}
+                            >
+                                <FaCopy /> Copy Message
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {showForm && (
+            <div className="dashboard-grid">
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaBullhorn />
+                    </div>
+                    <h3>Total Announcements</h3>
+                    <p>{announcements.length}</p>
+                </div>
+
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaCheckCircle />
+                    </div>
+                    <h3>Published</h3>
+                    <p>{publishedCount}</p>
+                </div>
+
+                <div className="stat-card">
+                    <div className="stat-icon">
+                        <FaEdit />
+                    </div>
+                    <h3>Drafts</h3>
+                    <p>{draftCount}</p>
+                </div>
+
+                <div className="stat-card warning">
+                    <div className="stat-icon">
+                        <FaBullhorn />
+                    </div>
+                    <h3>Urgent</h3>
+                    <p>{urgentCount}</p>
+                </div>
+            </div>
+
+            {showForm && canEditAnnouncements && (
                 <div className="form-card">
                     <div className="section-header">
                         <div>
@@ -384,42 +507,60 @@ const Announcements = () => {
                                     name="title"
                                     value={formData.title}
                                     onChange={handleChange}
-                                    placeholder="e.g. Youth Meeting This Friday"
+                                    placeholder="e.g. Sabbath Program Notice"
                                 />
                             </div>
 
                             <div>
-                                <label>Target Audience</label>
+                                <label>Audience</label>
                                 <select
-                                    name="target_audience"
-                                    value={formData.target_audience}
+                                    name="audience"
+                                    value={formData.audience}
                                     onChange={handleChange}
                                 >
                                     <option value="All Members">All Members</option>
-                                    <option value="Department">Department</option>
-                                    <option value="Leaders">Leaders</option>
+                                    <option value="Youth Ministry">Youth Ministry</option>
+                                    <option value="Women Ministry">Women Ministry</option>
+                                    <option value="Men Ministry">Men Ministry</option>
+                                    <option value="Pathfinders">Pathfinders</option>
+                                    <option value="Leaders Only">Leaders Only</option>
                                     <option value="Visitors">Visitors</option>
                                 </select>
                             </div>
 
                             <div>
-                                <label>Department</label>
+                                <label>Date</label>
+                                <input
+                                    name="announcement_date"
+                                    type="date"
+                                    value={formData.announcement_date}
+                                    onChange={handleChange}
+                                />
+                            </div>
+
+                            <div>
+                                <label>Priority</label>
                                 <select
-                                    name="department_id"
-                                    value={formData.department_id}
+                                    name="priority"
+                                    value={formData.priority}
                                     onChange={handleChange}
                                 >
-                                    <option value="">No specific department</option>
+                                    <option value="Low">Low</option>
+                                    <option value="Normal">Normal</option>
+                                    <option value="High">High</option>
+                                    <option value="Urgent">Urgent</option>
+                                </select>
+                            </div>
 
-                                    {departments.map((department) => (
-                                        <option
-                                            key={getDepartmentId(department)}
-                                            value={getDepartmentId(department)}
-                                        >
-                                            {department.name ||
-                                                department.department_name}
-                                        </option>
-                                    ))}
+                            <div>
+                                <label>Status</label>
+                                <select
+                                    name="status"
+                                    value={formData.status}
+                                    onChange={handleChange}
+                                >
+                                    <option value="Published">Published</option>
+                                    <option value="Draft">Draft</option>
                                 </select>
                             </div>
 
@@ -430,7 +571,7 @@ const Announcements = () => {
                                     value={formData.message}
                                     onChange={handleChange}
                                     rows="4"
-                                    placeholder="Write the announcement message"
+                                    placeholder="Write announcement message"
                                 ></textarea>
                             </div>
                         </div>
@@ -465,9 +606,7 @@ const Announcements = () => {
                 <div className="table-toolbar">
                     <div>
                         <h2>Church Announcements</h2>
-                        <p>
-                            {filteredAnnouncements.length} announcement(s) found
-                        </p>
+                        <p>{filteredAnnouncements.length} announcement(s) found</p>
                     </div>
 
                     <div className="toolbar-actions">
@@ -482,7 +621,10 @@ const Announcements = () => {
                             />
                         </div>
 
-                        <button className="secondary-btn" onClick={fetchData}>
+                        <button
+                            className="secondary-btn"
+                            onClick={fetchAnnouncements}
+                        >
                             <FaSyncAlt /> Refresh
                         </button>
                     </div>
@@ -501,10 +643,11 @@ const Announcements = () => {
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>Title</th>
-                                    <th>Message</th>
+                                    <th>Announcement</th>
                                     <th>Audience</th>
-                                    <th>Created</th>
+                                    <th>Date</th>
+                                    <th>Priority</th>
+                                    <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -514,24 +657,34 @@ const Announcements = () => {
                                     <tr key={getAnnouncementId(announcement)}>
                                         <td>
                                             <strong>{announcement.title}</strong>
+                                            <br />
+                                            <small>
+                                                {getAnnouncementMessage(announcement)}
+                                            </small>
                                         </td>
 
-                                        <td>
-                                            {announcement.message ||
-                                                announcement.content ||
-                                                "-"}
-                                        </td>
-
-                                        <td>
-                                            {announcement.target_audience ||
-                                                announcement.department_name ||
-                                                "All Members"}
-                                        </td>
+                                        <td>{getAnnouncementAudience(announcement)}</td>
 
                                         <td>
                                             {formatDate(
-                                                announcement.created_at
+                                                announcement.announcement_date
                                             ) || "-"}
+                                        </td>
+
+                                        <td>
+                                            <span className="status-badge">
+                                                {announcement.priority || "Normal"}
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <span
+                                                className={`status-badge ${
+                                                    announcement.status || "Published"
+                                                }`}
+                                            >
+                                                {announcement.status || "Published"}
+                                            </span>
                                         </td>
 
                                         <td>
@@ -539,33 +692,40 @@ const Announcements = () => {
                                                 <button
                                                     className="table-action-btn"
                                                     onClick={() =>
-                                                        handleEdit(announcement)
-                                                    }
-                                                >
-                                                    <FaEdit /> Edit
-                                                </button>
-
-                                                <button
-                                                    className="table-action-btn"
-                                                    onClick={() =>
-                                                        getWhatsappMessage(
+                                                        generateWhatsappMessage(
                                                             announcement
                                                         )
                                                     }
+                                                    disabled={loadingWhatsapp}
                                                 >
                                                     <FaWhatsapp /> WhatsApp
                                                 </button>
 
-                                                <button
-                                                    className="table-delete-btn"
-                                                    onClick={() =>
-                                                        openDeleteModal(
-                                                            announcement
-                                                        )
-                                                    }
-                                                >
-                                                    <FaTrash /> Delete
-                                                </button>
+                                                {canEditAnnouncements && (
+                                                    <>
+                                                        <button
+                                                            className="table-action-btn"
+                                                            onClick={() =>
+                                                                handleEdit(
+                                                                    announcement
+                                                                )
+                                                            }
+                                                        >
+                                                            <FaEdit /> Edit
+                                                        </button>
+
+                                                        <button
+                                                            className="table-delete-btn"
+                                                            onClick={() =>
+                                                                openDeleteModal(
+                                                                    announcement
+                                                                )
+                                                            }
+                                                        >
+                                                            <FaTrash /> Delete
+                                                        </button>
+                                                    </>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
