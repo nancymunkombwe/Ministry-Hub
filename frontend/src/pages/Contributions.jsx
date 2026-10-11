@@ -9,7 +9,9 @@ import {
     FaTrash,
     FaHandHoldingUsd,
     FaMoneyBillWave,
-    FaChartLine
+    FaChartLine,
+    FaEye,
+    FaStickyNote
 } from "react-icons/fa";
 
 import API from "../api/api";
@@ -33,6 +35,7 @@ const Contributions = () => {
 
     const [showForm, setShowForm] = useState(false);
     const [contributionToDelete, setContributionToDelete] = useState(null);
+    const [selectedContribution, setSelectedContribution] = useState(null);
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -40,6 +43,10 @@ const Contributions = () => {
 
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+
+    /* =====================================================
+       HELPERS
+    ===================================================== */
 
     const scrollToForm = () => {
         setTimeout(() => {
@@ -91,6 +98,7 @@ const Contributions = () => {
 
     const formatDate = (dateValue) => {
         if (!dateValue) return "";
+
         return String(dateValue).split("T")[0];
     };
 
@@ -103,40 +111,53 @@ const Contributions = () => {
         })}`;
     };
 
+    /* =====================================================
+       FETCH DATA
+    ===================================================== */
+
     const fetchData = async () => {
         setLoading(true);
         setError("");
 
         try {
-            const [contributionsResponse, membersResponse] =
-                await Promise.allSettled([
-                    API.get("/contributions"),
-                    API.get("/members")
-                ]);
+            const [
+                contributionsResponse,
+                membersResponse
+            ] = await Promise.all([
+                API.get("/contributions"),
+                API.get("/members")
+            ]);
 
-            if (contributionsResponse.status === "fulfilled") {
-                const contributionList =
-                    contributionsResponse.value.data.contributions ||
-                    contributionsResponse.value.data.data ||
-                    contributionsResponse.value.data;
+            const contributionList =
+                contributionsResponse.data.contributions ||
+                contributionsResponse.data.data ||
+                contributionsResponse.data;
 
-                setContributions(
-                    Array.isArray(contributionList) ? contributionList : []
-                );
-            }
+            const memberList =
+                membersResponse.data.members ||
+                membersResponse.data.data ||
+                membersResponse.data;
 
-            if (membersResponse.status === "fulfilled") {
-                const memberList =
-                    membersResponse.value.data.members ||
-                    membersResponse.value.data.data ||
-                    membersResponse.value.data;
+            setContributions(
+                Array.isArray(contributionList)
+                    ? contributionList
+                    : []
+            );
 
-                setMembers(Array.isArray(memberList) ? memberList : []);
-            }
+            setMembers(
+                Array.isArray(memberList)
+                    ? memberList
+                    : []
+            );
         } catch (error) {
+            console.error(
+                "Fetch contributions error:",
+                error
+            );
+
             setError(
                 error.response?.data?.message ||
-                    "Failed to load tithes and offerings. Please check if the backend is running."
+                    "Failed to load tithes and offerings."
             );
         } finally {
             setLoading(false);
@@ -147,7 +168,13 @@ const Contributions = () => {
         fetchData();
     }, []);
 
+    /* =====================================================
+       FILTER
+    ===================================================== */
+
     const filteredContributions = useMemo(() => {
+        const search = searchTerm.toLowerCase();
+
         return contributions.filter((contribution) => {
             const searchableText = `
                 ${getContributionMemberName(contribution)}
@@ -158,25 +185,49 @@ const Contributions = () => {
                 ${contribution.contribution_date || ""}
             `.toLowerCase();
 
-            return searchableText.includes(searchTerm.toLowerCase());
+            return searchableText.includes(search);
         });
     }, [contributions, searchTerm]);
 
-    const totalAmount = contributions.reduce((total, contribution) => {
-        return total + Number(contribution.amount || 0);
-    }, 0);
+    /* =====================================================
+       SUMMARY
+    ===================================================== */
+
+    const totalAmount = contributions.reduce(
+        (total, contribution) =>
+            total + Number(contribution.amount || 0),
+        0
+    );
 
     const titheAmount = contributions
-        .filter((contribution) => getContributionCategory(contribution) === "Tithe")
-        .reduce((total, contribution) => total + Number(contribution.amount || 0), 0);
+        .filter(
+            (contribution) =>
+                getContributionCategory(contribution) === "Tithe"
+        )
+        .reduce(
+            (total, contribution) =>
+                total + Number(contribution.amount || 0),
+            0
+        );
 
     const offeringAmount = contributions
         .filter((contribution) =>
-            ["Offering", "Special Offering"].includes(
+            [
+                "Offering",
+                "Special Offering"
+            ].includes(
                 getContributionCategory(contribution)
             )
         )
-        .reduce((total, contribution) => total + Number(contribution.amount || 0), 0);
+        .reduce(
+            (total, contribution) =>
+                total + Number(contribution.amount || 0),
+            0
+        );
+
+    /* =====================================================
+       FORM
+    ===================================================== */
 
     const handleChange = (event) => {
         const { name, value } = event.target;
@@ -188,11 +239,18 @@ const Contributions = () => {
     };
 
     const openAddForm = () => {
-        setFormData(emptyForm);
+        setFormData({
+            ...emptyForm,
+            contribution_date: new Date()
+                .toISOString()
+                .split("T")[0]
+        });
+
         setEditingId(null);
         setShowForm(true);
         setError("");
         setSuccess("");
+
         scrollToForm();
     };
 
@@ -202,6 +260,10 @@ const Contributions = () => {
         setShowForm(false);
         setError("");
     };
+
+    /* =====================================================
+       SAVE
+    ===================================================== */
 
     const handleSubmit = async (event) => {
         event.preventDefault();
@@ -215,69 +277,144 @@ const Contributions = () => {
             !formData.amount ||
             !formData.contribution_date
         ) {
-            setError("Category, amount, and date are required.");
+            setError(
+                "Category, amount, and date are required."
+            );
+
             setSaving(false);
             return;
         }
 
         if (Number(formData.amount) <= 0) {
-            setError("Amount must be greater than 0.");
+            setError(
+                "Amount must be greater than 0."
+            );
+
             setSaving(false);
             return;
         }
 
         try {
             const payload = {
-                member_id: formData.member_id || null,
-                contribution_category: formData.contribution_category,
-                contribution_type: formData.contribution_category,
-                category: formData.contribution_category,
-                amount: Number(formData.amount),
-                contribution_date: formData.contribution_date,
-                payment_method: formData.payment_method,
-                notes: formData.notes
+                member_id:
+                    formData.member_id || null,
+
+                contribution_category:
+                    formData.contribution_category,
+
+                amount:
+                    Number(formData.amount),
+
+                contribution_date:
+                    formData.contribution_date,
+
+                payment_method:
+                    formData.payment_method,
+
+                notes:
+                    formData.notes
             };
 
             if (editingId) {
-                await API.put(`/contributions/${editingId}`, payload);
-                setSuccess("Tithe / offering record updated successfully.");
+                await API.put(
+                    `/contributions/${editingId}`,
+                    payload
+                );
+
+                setSuccess(
+                    "Tithe / offering record updated successfully."
+                );
             } else {
-                await API.post("/contributions", payload);
-                setSuccess("Tithe / offering recorded successfully.");
+                await API.post(
+                    "/contributions",
+                    payload
+                );
+
+                setSuccess(
+                    "Tithe / offering recorded successfully."
+                );
             }
 
             resetForm();
+
             await fetchData();
         } catch (error) {
+            console.error(
+                "Contribution save error:",
+                error
+            );
+
             setError(
-                error.response?.data?.message ||
-                    "Failed to save tithe / offering record. Please try again."
+                error.response?.data?.error ||
+                    error.response?.data?.message ||
+                    error.message ||
+                    "Failed to save contribution."
             );
         } finally {
             setSaving(false);
         }
     };
 
+    /* =====================================================
+       EDIT
+    ===================================================== */
+
     const handleEdit = (contribution) => {
-        setEditingId(getContributionId(contribution));
+        setEditingId(
+            getContributionId(contribution)
+        );
 
         setFormData({
-            member_id: contribution.member_id || "",
-            contribution_category: getContributionCategory(contribution),
-            amount: contribution.amount || "",
-            contribution_date: formatDate(contribution.contribution_date),
-            payment_method: contribution.payment_method || "Cash",
-            notes: contribution.notes || ""
+            member_id:
+                contribution.member_id || "",
+
+            contribution_category:
+                getContributionCategory(contribution),
+
+            amount:
+                contribution.amount || "",
+
+            contribution_date:
+                formatDate(
+                    contribution.contribution_date
+                ),
+
+            payment_method:
+                contribution.payment_method || "Cash",
+
+            notes:
+                contribution.notes || ""
         });
 
         setShowForm(true);
         setError("");
         setSuccess("");
+
         scrollToForm();
     };
 
+    /* =====================================================
+       VIEW DETAILS
+    ===================================================== */
+
+    const handleView = (contribution) => {
+        setSelectedContribution(contribution);
+        setError("");
+    };
+
+    const closeViewModal = () => {
+        setSelectedContribution(null);
+    };
+
+    /* =====================================================
+       DELETE
+    ===================================================== */
+
     const openDeleteModal = (contribution) => {
-        setContributionToDelete(contribution);
+        setContributionToDelete(
+            contribution
+        );
+
         setError("");
         setSuccess("");
     };
@@ -287,71 +424,148 @@ const Contributions = () => {
     };
 
     const confirmDelete = async () => {
-        if (!contributionToDelete) return;
+        if (!contributionToDelete) {
+            return;
+        }
 
-        const contributionId = getContributionId(contributionToDelete);
+        const contributionId =
+            getContributionId(
+                contributionToDelete
+            );
 
         setDeleting(true);
         setError("");
         setSuccess("");
 
         try {
-            await API.delete(`/contributions/${contributionId}`);
-
-            setContributions((previousContributions) =>
-                previousContributions.filter(
-                    (contribution) =>
-                        String(getContributionId(contribution)) !==
-                        String(contributionId)
-                )
+            await API.delete(
+                `/contributions/${contributionId}`
             );
 
-            setSuccess("Tithe / offering record deleted successfully.");
+            setContributions(
+                (previousContributions) =>
+                    previousContributions.filter(
+                        (contribution) =>
+                            String(
+                                getContributionId(
+                                    contribution
+                                )
+                            ) !==
+                            String(contributionId)
+                    )
+            );
+
+            setSuccess(
+                "Tithe / offering record deleted successfully."
+            );
+
             setContributionToDelete(null);
         } catch (error) {
+            console.error(
+                "Delete contribution error:",
+                error
+            );
+
             setError(
                 error.response?.data?.message ||
-                    "Failed to delete tithe / offering record. Please try again."
+                    "Failed to delete contribution."
             );
         } finally {
             setDeleting(false);
         }
     };
 
+    /* =====================================================
+       RENDER
+    ===================================================== */
+
     return (
         <div className="page page-fade">
+
+            {/* =================================================
+                HEADER
+            ================================================= */}
+
             <div className="page-header page-header-row">
+
                 <div>
-                    <span className="eyebrow">Church Finance</span>
-                    <h1>Tithes & Offerings</h1>
+                    <span className="eyebrow">
+                        Church Finance
+                    </span>
+
+                    <h1>
+                        Tithes & Offerings
+                    </h1>
+
                     <p>
-                        Record tithes, offerings, donations, and special church
-                        contributions.
+                        Record tithes, offerings,
+                        donations, and special
+                        church contributions.
                     </p>
                 </div>
 
-                <button className="primary-btn" onClick={openAddForm}>
-                    <FaPlus /> Add Record
+                <button
+                    className="primary-btn"
+                    onClick={openAddForm}
+                >
+                    <FaPlus />
+                    Add Record
                 </button>
+
             </div>
 
-            {error && <div className="page-error">{error}</div>}
-            {success && <div className="success-message">{success}</div>}
+
+            {/* =================================================
+                MESSAGES
+            ================================================= */}
+
+            {error && (
+                <div className="page-error">
+                    {error}
+                </div>
+            )}
+
+            {success && (
+                <div className="success-message">
+                    {success}
+                </div>
+            )}
+
+
+            {/* =================================================
+                DELETE MODAL
+            ================================================= */}
 
             {contributionToDelete && (
                 <div className="modal-overlay">
+
                     <div className="delete-modal">
+
                         <div className="delete-modal-icon">
                             <FaTrash />
                         </div>
 
-                        <h2>Delete Record?</h2>
+                        <h2>
+                            Delete Record?
+                        </h2>
 
                         <p>
-                            Are you sure you want to delete this{" "}
-                            <strong>{getContributionCategory(contributionToDelete)}</strong>{" "}
+                            Are you sure you want
+                            to delete this{" "}
+                            <strong>
+                                {
+                                    getContributionCategory(
+                                        contributionToDelete
+                                    )
+                                }
+                            </strong>{" "}
                             record of{" "}
-                            <strong>{formatMoney(contributionToDelete.amount)}</strong>?
+                            <strong>
+                                {formatMoney(
+                                    contributionToDelete.amount
+                                )}
+                            </strong>
+                            ?
                         </p>
 
                         <p className="delete-warning">
@@ -359,9 +573,12 @@ const Contributions = () => {
                         </p>
 
                         <div className="delete-modal-actions">
+
                             <button
                                 className="secondary-btn"
-                                onClick={closeDeleteModal}
+                                onClick={
+                                    closeDeleteModal
+                                }
                                 disabled={deleting}
                             >
                                 Cancel
@@ -369,170 +586,540 @@ const Contributions = () => {
 
                             <button
                                 className="danger-btn"
-                                onClick={confirmDelete}
+                                onClick={
+                                    confirmDelete
+                                }
                                 disabled={deleting}
                             >
-                                {deleting ? "Deleting..." : "Yes, Delete"}
+                                <FaTrash />
+
+                                {deleting
+                                    ? "Deleting..."
+                                    : "Yes, Delete"}
                             </button>
+
                         </div>
+
                     </div>
+
                 </div>
             )}
 
+
+            {/* =================================================
+                VIEW DETAILS MODAL
+            ================================================= */}
+
+            {selectedContribution && (
+                <div className="modal-overlay">
+
+                    <div className="form-card contribution-details-modal">
+
+                        <div className="section-header">
+
+                            <div>
+                                <span className="eyebrow">
+                                    Contribution Details
+                                </span>
+
+                                <h2>
+                                    {
+                                        getContributionCategory(
+                                            selectedContribution
+                                        )
+                                    }
+                                </h2>
+                            </div>
+
+                            <button
+                                className="icon-btn"
+                                onClick={
+                                    closeViewModal
+                                }
+                            >
+                                <FaTimes />
+                            </button>
+
+                        </div>
+
+
+                        <div className="details-grid">
+
+                            <div className="detail-item">
+                                <span>
+                                    Member / Source
+                                </span>
+
+                                <strong>
+                                    {
+                                        getContributionMemberName(
+                                            selectedContribution
+                                        )
+                                    }
+                                </strong>
+                            </div>
+
+
+                            <div className="detail-item">
+                                <span>
+                                    Category
+                                </span>
+
+                                <strong>
+                                    {
+                                        getContributionCategory(
+                                            selectedContribution
+                                        )
+                                    }
+                                </strong>
+                            </div>
+
+
+                            <div className="detail-item">
+                                <span>
+                                    Amount
+                                </span>
+
+                                <strong>
+                                    {formatMoney(
+                                        selectedContribution.amount
+                                    )}
+                                </strong>
+                            </div>
+
+
+                            <div className="detail-item">
+                                <span>
+                                    Date
+                                </span>
+
+                                <strong>
+                                    {formatDate(
+                                        selectedContribution.contribution_date
+                                    ) || "-"}
+                                </strong>
+                            </div>
+
+
+                            <div className="detail-item">
+                                <span>
+                                    Payment Method
+                                </span>
+
+                                <strong>
+                                    {
+                                        selectedContribution.payment_method ||
+                                        "-"
+                                    }
+                                </strong>
+                            </div>
+
+
+                            <div className="detail-item">
+                                <span>
+                                    Recorded By
+                                </span>
+
+                                <strong>
+                                    {
+                                        selectedContribution.recorded_by_name ||
+                                        "-"
+                                    }
+                                </strong>
+                            </div>
+
+                        </div>
+
+
+                        <div className="details-notes">
+
+                            <div className="details-notes-header">
+                                <FaStickyNote />
+
+                                <strong>
+                                    Notes
+                                </strong>
+                            </div>
+
+                            <p>
+                                {
+                                    selectedContribution.notes ||
+                                    "No notes were added to this contribution."
+                                }
+                            </p>
+
+                        </div>
+
+
+                        <div className="form-actions">
+
+                            <button
+                                className="secondary-btn"
+                                onClick={
+                                    closeViewModal
+                                }
+                            >
+                                Close
+                            </button>
+
+                            <button
+                                className="primary-btn"
+                                onClick={() => {
+                                    closeViewModal();
+
+                                    handleEdit(
+                                        selectedContribution
+                                    );
+                                }}
+                            >
+                                <FaEdit />
+                                Edit Record
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </div>
+            )}
+
+
+            {/* =================================================
+                SUMMARY CARDS
+            ================================================= */}
+
             <div className="dashboard-grid">
+
                 <div className="stat-card">
+
                     <div className="stat-icon">
                         <FaHandHoldingUsd />
                     </div>
-                    <h3>Total Records</h3>
-                    <p>{contributions.length}</p>
+
+                    <h3>
+                        Total Records
+                    </h3>
+
+                    <p>
+                        {contributions.length}
+                    </p>
+
                 </div>
 
+
                 <div className="stat-card">
+
                     <div className="stat-icon">
                         <FaMoneyBillWave />
                     </div>
-                    <h3>Total Amount</h3>
-                    <p>{formatMoney(totalAmount)}</p>
+
+                    <h3>
+                        Total Amount
+                    </h3>
+
+                    <p>
+                        {formatMoney(totalAmount)}
+                    </p>
+
                 </div>
 
+
                 <div className="stat-card">
+
                     <div className="stat-icon">
                         <FaChartLine />
                     </div>
-                    <h3>Total Tithe</h3>
-                    <p>{formatMoney(titheAmount)}</p>
+
+                    <h3>
+                        Total Tithe
+                    </h3>
+
+                    <p>
+                        {formatMoney(titheAmount)}
+                    </p>
+
                 </div>
 
+
                 <div className="stat-card">
+
                     <div className="stat-icon">
                         <FaHandHoldingUsd />
                     </div>
-                    <h3>Total Offerings</h3>
-                    <p>{formatMoney(offeringAmount)}</p>
+
+                    <h3>
+                        Total Offerings
+                    </h3>
+
+                    <p>
+                        {formatMoney(
+                            offeringAmount
+                        )}
+                    </p>
+
                 </div>
+
             </div>
+
+
+            {/* =================================================
+                ADD / EDIT FORM
+            ================================================= */}
 
             {showForm && (
                 <div className="form-card">
+
                     <div className="section-header">
+
                         <div>
+
                             <h2>
                                 {editingId
                                     ? "Edit Tithe / Offering Record"
                                     : "Add Tithe / Offering Record"}
                             </h2>
-                            <p>Enter the financial record details below.</p>
+
+                            <p>
+                                Enter the financial
+                                record details below.
+                            </p>
+
                         </div>
 
-                        <button className="icon-btn" onClick={resetForm}>
+                        <button
+                            className="icon-btn"
+                            onClick={
+                                resetForm
+                            }
+                        >
                             <FaTimes />
                         </button>
+
                     </div>
 
-                    <form onSubmit={handleSubmit}>
+
+                    <form
+                        onSubmit={
+                            handleSubmit
+                        }
+                    >
+
                         <div className="form-grid">
+
                             <div>
-                                <label>Member / Source</label>
+                                <label>
+                                    Member / Source
+                                </label>
+
                                 <select
                                     name="member_id"
-                                    value={formData.member_id}
-                                    onChange={handleChange}
+                                    value={
+                                        formData.member_id
+                                    }
+                                    onChange={
+                                        handleChange
+                                    }
                                 >
+
                                     <option value="">
                                         General Church Offering / Anonymous
                                     </option>
 
-                                    {members.map((member) => (
-                                        <option
-                                            key={getMemberId(member)}
-                                            value={getMemberId(member)}
-                                        >
-                                            {getMemberName(member)}
-                                        </option>
-                                    ))}
+                                    {members.map(
+                                        (member) => (
+                                            <option
+                                                key={
+                                                    getMemberId(
+                                                        member
+                                                    )
+                                                }
+                                                value={
+                                                    getMemberId(
+                                                        member
+                                                    )
+                                                }
+                                            >
+                                                {
+                                                    getMemberName(
+                                                        member
+                                                    )
+                                                }
+                                            </option>
+                                        )
+                                    )}
+
                                 </select>
                             </div>
 
+
                             <div>
-                                <label>Category</label>
+                                <label>
+                                    Category
+                                </label>
+
                                 <select
                                     name="contribution_category"
-                                    value={formData.contribution_category}
-                                    onChange={handleChange}
+                                    value={
+                                        formData.contribution_category
+                                    }
+                                    onChange={
+                                        handleChange
+                                    }
                                 >
-                                    <option value="Tithe">Tithe</option>
-                                    <option value="Offering">Offering</option>
+
+                                    <option value="Tithe">
+                                        Tithe
+                                    </option>
+
+                                    <option value="Offering">
+                                        Offering
+                                    </option>
+
                                     <option value="Special Offering">
                                         Special Offering
                                     </option>
-                                    <option value="Donation">Donation</option>
+
+                                    <option value="Donation">
+                                        Donation
+                                    </option>
+
                                     <option value="Building Fund">
                                         Building Fund
                                     </option>
-                                    <option value="Welfare">Welfare</option>
+
+                                    <option value="Welfare">
+                                        Welfare
+                                    </option>
+
                                     <option value="Camp Meeting">
                                         Camp Meeting
                                     </option>
-                                    <option value="Other">Other</option>
+
+                                    <option value="Dorcas">
+                                        Dorcas
+                                    </option>
+
+                                    <option value="Youth Fund">
+                                        Youth Fund
+                                    </option>
+
+                                    <option value="Other">
+                                        Other
+                                    </option>
+
                                 </select>
                             </div>
 
+
                             <div>
-                                <label>Amount</label>
+                                <label>
+                                    Amount
+                                </label>
+
                                 <input
                                     name="amount"
                                     type="number"
                                     min="0"
                                     step="0.01"
-                                    value={formData.amount}
-                                    onChange={handleChange}
+                                    value={
+                                        formData.amount
+                                    }
+                                    onChange={
+                                        handleChange
+                                    }
                                     placeholder="e.g. 250"
                                 />
                             </div>
 
+
                             <div>
-                                <label>Date</label>
+                                <label>
+                                    Date
+                                </label>
+
                                 <input
                                     name="contribution_date"
                                     type="date"
-                                    value={formData.contribution_date}
-                                    onChange={handleChange}
+                                    value={
+                                        formData.contribution_date
+                                    }
+                                    onChange={
+                                        handleChange
+                                    }
                                 />
                             </div>
 
+
                             <div>
-                                <label>Payment Method</label>
+                                <label>
+                                    Payment Method
+                                </label>
+
                                 <select
                                     name="payment_method"
-                                    value={formData.payment_method}
-                                    onChange={handleChange}
+                                    value={
+                                        formData.payment_method
+                                    }
+                                    onChange={
+                                        handleChange
+                                    }
                                 >
-                                    <option value="Cash">Cash</option>
-                                    <option value="Mobile Money">Mobile Money</option>
-                                    <option value="Bank Transfer">Bank Transfer</option>
-                                    <option value="Cheque">Cheque</option>
-                                    <option value="Other">Other</option>
+
+                                    <option value="Cash">
+                                        Cash
+                                    </option>
+
+                                    <option value="Mobile Money">
+                                        Mobile Money
+                                    </option>
+
+                                    <option value="Bank Transfer">
+                                        Bank Transfer
+                                    </option>
+
+                                    <option value="Cheque">
+                                        Cheque
+                                    </option>
+
+                                    <option value="Other">
+                                        Other
+                                    </option>
+
                                 </select>
                             </div>
 
+
                             <div className="full-width">
-                                <label>Notes</label>
+
+                                <label>
+                                    Notes
+                                </label>
+
                                 <textarea
                                     name="notes"
-                                    value={formData.notes}
-                                    onChange={handleChange}
+                                    value={
+                                        formData.notes
+                                    }
+                                    onChange={
+                                        handleChange
+                                    }
                                     rows="3"
-                                    placeholder="Optional notes"
+                                    placeholder="Optional notes, reference number, purpose, etc."
                                 ></textarea>
+
                             </div>
+
                         </div>
 
+
                         <div className="form-actions">
+
                             <button
                                 type="button"
                                 className="secondary-btn"
-                                onClick={resetForm}
+                                onClick={
+                                    resetForm
+                                }
                             >
                                 Cancel
                             </button>
@@ -542,124 +1129,305 @@ const Contributions = () => {
                                 className="primary-btn"
                                 disabled={saving}
                             >
+
                                 <FaSave />
+
                                 {saving
                                     ? "Saving..."
                                     : editingId
                                     ? "Update Record"
                                     : "Save Record"}
+
                             </button>
+
                         </div>
+
                     </form>
+
                 </div>
             )}
 
+
+            {/* =================================================
+                RECORDS TABLE
+            ================================================= */}
+
             <div className="table-card">
+
                 <div className="table-toolbar">
+
                     <div>
-                        <h2>Tithes & Offerings Records</h2>
-                        <p>{filteredContributions.length} record(s) found</p>
+
+                        <h2>
+                            Tithes & Offerings Records
+                        </h2>
+
+                        <p>
+                            {
+                                filteredContributions.length
+                            } record(s) found
+                        </p>
+
                     </div>
+
 
                     <div className="toolbar-actions">
+
                         <div className="search-box">
+
                             <FaSearch />
+
                             <input
-                                value={searchTerm}
-                                onChange={(event) =>
-                                    setSearchTerm(event.target.value)
+                                value={
+                                    searchTerm
                                 }
-                                placeholder="Search records..."
+                                onChange={(event) =>
+                                    setSearchTerm(
+                                        event.target.value
+                                    )
+                                }
+                                placeholder="Search member, category, payment..."
                             />
+
                         </div>
 
-                        <button className="secondary-btn" onClick={fetchData}>
-                            <FaSyncAlt /> Refresh
+
+                        <button
+                            className="secondary-btn"
+                            onClick={
+                                fetchData
+                            }
+                        >
+                            <FaSyncAlt />
+                            Refresh
                         </button>
+
                     </div>
+
                 </div>
 
+
                 {loading ? (
+
                     <div className="loading-box">
                         Loading tithes and offerings...
                     </div>
+
                 ) : filteredContributions.length === 0 ? (
+
                     <div className="empty-state">
+
                         <FaHandHoldingUsd />
-                        <h3>No tithes or offerings found</h3>
-                        <p>Add a financial record to get started.</p>
+
+                        <h3>
+                            No tithes or offerings found
+                        </h3>
+
+                        <p>
+                            Add a financial record
+                            to get started.
+                        </p>
+
                     </div>
+
                 ) : (
+
                     <div className="table-wrapper">
+
                         <table className="data-table">
+
                             <thead>
+
                                 <tr>
-                                    <th>Member / Source</th>
-                                    <th>Category</th>
-                                    <th>Amount</th>
-                                    <th>Date</th>
-                                    <th>Payment</th>
-                                    <th>Actions</th>
+
+                                    <th>
+                                        Member / Source
+                                    </th>
+
+                                    <th>
+                                        Category
+                                    </th>
+
+                                    <th>
+                                        Amount
+                                    </th>
+
+                                    <th>
+                                        Date
+                                    </th>
+
+                                    <th>
+                                        Payment
+                                    </th>
+
+                                    <th>
+                                        Notes
+                                    </th>
+
+                                    <th>
+                                        Actions
+                                    </th>
+
                                 </tr>
+
                             </thead>
 
+
                             <tbody>
-                                {filteredContributions.map((contribution) => (
-                                    <tr key={getContributionId(contribution)}>
-                                        <td>
-                                            <strong>
-                                                {getContributionMemberName(contribution)}
-                                            </strong>
-                                        </td>
 
-                                        <td>
-                                            <span className="status-badge">
-                                                {getContributionCategory(contribution)}
-                                            </span>
-                                        </td>
+                                {filteredContributions.map(
+                                    (contribution) => (
 
-                                        <td>
-                                            <strong>
-                                                {formatMoney(contribution.amount)}
-                                            </strong>
-                                        </td>
+                                        <tr
+                                            key={
+                                                getContributionId(
+                                                    contribution
+                                                )
+                                            }
+                                        >
 
-                                        <td>
-                                            {formatDate(
-                                                contribution.contribution_date
-                                            ) || "-"}
-                                        </td>
+                                            <td>
 
-                                        <td>{contribution.payment_method || "-"}</td>
+                                                <strong>
+                                                    {
+                                                        getContributionMemberName(
+                                                            contribution
+                                                        )
+                                                    }
+                                                </strong>
 
-                                        <td>
-                                            <div className="table-actions-inline">
-                                                <button
-                                                    className="table-action-btn"
-                                                    onClick={() =>
-                                                        handleEdit(contribution)
+                                            </td>
+
+
+                                            <td>
+
+                                                <span className="status-badge">
+
+                                                    {
+                                                        getContributionCategory(
+                                                            contribution
+                                                        )
+                                                    }
+
+                                                </span>
+
+                                            </td>
+
+
+                                            <td>
+
+                                                <strong>
+                                                    {formatMoney(
+                                                        contribution.amount
+                                                    )}
+                                                </strong>
+
+                                            </td>
+
+
+                                            <td>
+
+                                                {formatDate(
+                                                    contribution.contribution_date
+                                                ) || "-"}
+
+                                            </td>
+
+
+                                            <td>
+
+                                                {
+                                                    contribution.payment_method ||
+                                                    "-"
+                                                }
+
+                                            </td>
+
+
+                                            <td>
+
+                                                <span
+                                                    title={
+                                                        contribution.notes ||
+                                                        ""
                                                     }
                                                 >
-                                                    <FaEdit /> Edit
-                                                </button>
-
-                                                <button
-                                                    className="table-delete-btn"
-                                                    onClick={() =>
-                                                        openDeleteModal(contribution)
+                                                    {
+                                                        contribution.notes
+                                                            ? contribution.notes.length > 30
+                                                                ? `${contribution.notes.substring(
+                                                                      0,
+                                                                      30
+                                                                  )}...`
+                                                                : contribution.notes
+                                                            : "-"
                                                     }
-                                                >
-                                                    <FaTrash /> Delete
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
+                                                </span>
+
+                                            </td>
+
+
+                                            <td>
+
+                                                <div className="table-actions-inline">
+
+                                                    <button
+                                                        className="table-action-btn"
+                                                        onClick={() =>
+                                                            handleView(
+                                                                contribution
+                                                            )
+                                                        }
+                                                    >
+                                                        <FaEye />
+                                                        View
+                                                    </button>
+
+
+                                                    <button
+                                                        className="table-action-btn"
+                                                        onClick={() =>
+                                                            handleEdit(
+                                                                contribution
+                                                            )
+                                                        }
+                                                    >
+                                                        <FaEdit />
+                                                        Edit
+                                                    </button>
+
+
+                                                    <button
+                                                        className="table-delete-btn"
+                                                        onClick={() =>
+                                                            openDeleteModal(
+                                                                contribution
+                                                            )
+                                                        }
+                                                    >
+                                                        <FaTrash />
+                                                        Delete
+                                                    </button>
+
+                                                </div>
+
+                                            </td>
+
+                                        </tr>
+
+                                    )
+                                )}
+
                             </tbody>
+
                         </table>
+
                     </div>
+
                 )}
+
             </div>
+
         </div>
     );
 };

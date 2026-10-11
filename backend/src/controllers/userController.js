@@ -349,3 +349,50 @@ exports.deactivateUser = (req, res) => {
         });
     });
 };
+
+// Permanently delete a user account. Related records use ON DELETE SET NULL.
+exports.deleteUser = (req, res) => {
+    const targetId = Number(req.params.id);
+    const currentUserId = Number(req.user?.id);
+
+    if (!Number.isInteger(targetId) || targetId < 1) {
+        return res.status(400).json({ message: "Invalid user ID." });
+    }
+
+    if (targetId === currentUserId) {
+        return res.status(400).json({ message: "You cannot delete your own account while signed in." });
+    }
+
+    db.query("SELECT id, role FROM users WHERE id = ?", [targetId], (lookupError, rows) => {
+        if (lookupError) {
+            return res.status(500).json({ message: "Failed to check user account.", error: lookupError.message });
+        }
+        if (!rows.length) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        const deleteTarget = () => {
+            db.query("DELETE FROM users WHERE id = ?", [targetId], (deleteError, result) => {
+                if (deleteError) {
+                    return res.status(500).json({ message: "Failed to delete user.", error: deleteError.message });
+                }
+                if (!result.affectedRows) {
+                    return res.status(404).json({ message: "User not found." });
+                }
+                return res.status(200).json({ message: "User deleted successfully." });
+            });
+        };
+
+        if (rows[0].role !== "admin") return deleteTarget();
+
+        db.query("SELECT COUNT(*) AS adminCount FROM users WHERE role = 'admin'", (countError, countRows) => {
+            if (countError) {
+                return res.status(500).json({ message: "Failed to verify administrator accounts.", error: countError.message });
+            }
+            if (Number(countRows[0]?.adminCount || 0) <= 1) {
+                return res.status(400).json({ message: "You cannot delete the last administrator account." });
+            }
+            return deleteTarget();
+        });
+    });
+};

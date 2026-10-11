@@ -24,11 +24,10 @@ const emptyForm = {
     title: "",
     description: "",
     event_date: "",
-    start_time: "",
-    end_time: "",
+    event_time: "",
     location: "",
-    event_type: "Church Service",
-    organizer: ""
+    event_type: "Other",
+    department_id: ""
 };
 
 const Events = () => {
@@ -38,8 +37,8 @@ const Events = () => {
     const canEditEvents = canManageEvents(role);
 
     const [events, setEvents] = useState([]);
-
     const [formData, setFormData] = useState(emptyForm);
+
     const [searchTerm, setSearchTerm] = useState("");
     const [editingId, setEditingId] = useState(null);
 
@@ -52,6 +51,10 @@ const Events = () => {
 
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+
+    // =====================================================
+    // HELPERS
+    // =====================================================
 
     const scrollToForm = () => {
         setTimeout(() => {
@@ -71,11 +74,17 @@ const Events = () => {
     };
 
     const getEventTitle = (event) => {
-        return event.title || event.event_title || event.event_name || event.name || "Event";
+        return (
+            event.title ||
+            event.event_title ||
+            event.event_name ||
+            event.name ||
+            "Event"
+        );
     };
 
     const getEventType = (event) => {
-        return event.event_type || event.type || "Church Service";
+        return event.event_type || "Other";
     };
 
     const formatDate = (dateValue) => {
@@ -87,6 +96,10 @@ const Events = () => {
         if (!timeValue) return "";
         return String(timeValue).slice(0, 5);
     };
+
+    // =====================================================
+    // FETCH EVENTS
+    // =====================================================
 
     const fetchEvents = async () => {
         setLoading(true);
@@ -115,6 +128,10 @@ const Events = () => {
         fetchEvents();
     }, []);
 
+    // =====================================================
+    // FILTER EVENTS
+    // =====================================================
+
     const filteredEvents = useMemo(() => {
         return events.filter((event) => {
             const searchableText = `
@@ -122,26 +139,36 @@ const Events = () => {
                 ${event.description || ""}
                 ${event.location || ""}
                 ${getEventType(event)}
-                ${event.organizer || ""}
                 ${event.event_date || ""}
+                ${event.event_time || ""}
             `.toLowerCase();
 
             return searchableText.includes(searchTerm.toLowerCase());
         });
     }, [events, searchTerm]);
 
+    // =====================================================
+    // STATISTICS
+    // =====================================================
+
     const today = new Date().toISOString().split("T")[0];
 
     const upcomingEvents = events.filter((event) => {
-        return formatDate(event.event_date || event.date) >= today;
+        const eventDate = formatDate(event.event_date);
+
+        return eventDate >= today;
     }).length;
 
     const thisMonthEvents = events.filter((event) => {
-        const eventDate = formatDate(event.event_date || event.date);
+        const eventDate = formatDate(event.event_date);
         const currentMonth = today.slice(0, 7);
 
         return eventDate.startsWith(currentMonth);
     }).length;
+
+    // =====================================================
+    // FORM
+    // =====================================================
 
     const handleChange = (event) => {
         const { name, value } = event.target;
@@ -163,6 +190,7 @@ const Events = () => {
         setShowForm(true);
         setError("");
         setSuccess("");
+
         scrollToForm();
     };
 
@@ -172,6 +200,10 @@ const Events = () => {
         setShowForm(false);
         setError("");
     };
+
+    // =====================================================
+    // CREATE / UPDATE EVENT
+    // =====================================================
 
     const handleSubmit = async (event) => {
         event.preventDefault();
@@ -193,31 +225,32 @@ const Events = () => {
 
         try {
             const payload = {
-                title: formData.title,
-                event_title: formData.title,
-                event_name: formData.title,
-                description: formData.description,
-                event_date: formData.event_date,
-                date: formData.event_date,
-                start_time: formData.start_time || null,
-                end_time: formData.end_time || null,
-                location: formData.location,
+                title: formData.title.trim(),
+                description: formData.description.trim(),
                 event_type: formData.event_type,
-                type: formData.event_type,
-                organizer: formData.organizer
+                event_date: formData.event_date,
+                event_time: formData.event_time || null,
+                location: formData.location.trim() || null,
+                department_id: formData.department_id
+                    ? Number(formData.department_id)
+                    : null
             };
 
             if (editingId) {
                 await API.put(`/events/${editingId}`, payload);
+
                 setSuccess("Event updated successfully.");
             } else {
                 await API.post("/events", payload);
+
                 setSuccess("Event created successfully.");
             }
 
             resetForm();
             await fetchEvents();
         } catch (error) {
+            console.error("SAVE EVENT ERROR:", error);
+
             setError(
                 error.response?.data?.message ||
                     "Failed to save event. Please try again."
@@ -226,6 +259,10 @@ const Events = () => {
             setSaving(false);
         }
     };
+
+    // =====================================================
+    // EDIT EVENT
+    // =====================================================
 
     const handleEdit = (event) => {
         if (!canEditEvents) {
@@ -238,19 +275,23 @@ const Events = () => {
         setFormData({
             title: getEventTitle(event),
             description: event.description || "",
-            event_date: formatDate(event.event_date || event.date),
-            start_time: formatTime(event.start_time),
-            end_time: formatTime(event.end_time),
+            event_date: formatDate(event.event_date),
+            event_time: formatTime(event.event_time),
             location: event.location || "",
             event_type: getEventType(event),
-            organizer: event.organizer || ""
+            department_id: event.department_id || ""
         });
 
         setShowForm(true);
         setError("");
         setSuccess("");
+
         scrollToForm();
     };
+
+    // =====================================================
+    // DELETE
+    // =====================================================
 
     const openDeleteModal = (event) => {
         if (!canEditEvents) {
@@ -286,13 +327,16 @@ const Events = () => {
 
             setEvents((previousEvents) =>
                 previousEvents.filter(
-                    (event) => String(getEventId(event)) !== String(eventId)
+                    (event) =>
+                        String(getEventId(event)) !== String(eventId)
                 )
             );
 
             setSuccess("Event deleted successfully.");
             setEventToDelete(null);
         } catch (error) {
+            console.error("DELETE EVENT ERROR:", error);
+
             setError(
                 error.response?.data?.message ||
                     "Failed to delete event. Please try again."
@@ -302,34 +346,62 @@ const Events = () => {
         }
     };
 
+    // =====================================================
+    // UI
+    // =====================================================
+
     return (
         <div className="page page-fade">
+
+            {/* PAGE HEADER */}
             <div className="page-header page-header-row">
                 <div>
                     <span className="eyebrow">Church Calendar</span>
+
                     <h1>Events</h1>
-                    <p>Create and manage church services, meetings, and programs.</p>
+
+                    <p>
+                        Create and manage church services, meetings, and
+                        programs.
+                    </p>
                 </div>
 
                 {canEditEvents && (
-                    <button className="primary-btn" onClick={openAddForm}>
+                    <button
+                        className="primary-btn"
+                        onClick={openAddForm}
+                    >
                         <FaPlus /> Add Event
                     </button>
                 )}
             </div>
 
+            {/* PERMISSION MESSAGE */}
             {!canEditEvents && (
                 <div className="info-message">
                     {getNoPermissionMessage()}
                 </div>
             )}
 
-            {error && <div className="page-error">{error}</div>}
-            {success && <div className="success-message">{success}</div>}
+            {/* ERROR */}
+            {error && (
+                <div className="page-error">
+                    {error}
+                </div>
+            )}
 
+            {/* SUCCESS */}
+            {success && (
+                <div className="success-message">
+                    {success}
+                </div>
+            )}
+
+            {/* DELETE MODAL */}
             {eventToDelete && (
                 <div className="modal-overlay">
                     <div className="delete-modal">
+
                         <div className="delete-modal-icon">
                             <FaTrash />
                         </div>
@@ -338,7 +410,10 @@ const Events = () => {
 
                         <p>
                             Are you sure you want to delete{" "}
-                            <strong>{getEventTitle(eventToDelete)}</strong>?
+                            <strong>
+                                {getEventTitle(eventToDelete)}
+                            </strong>
+                            ?
                         </p>
 
                         <p className="delete-warning">
@@ -346,6 +421,7 @@ const Events = () => {
                         </p>
 
                         <div className="delete-modal-actions">
+
                             <button
                                 className="secondary-btn"
                                 onClick={closeDeleteModal}
@@ -359,114 +435,170 @@ const Events = () => {
                                 onClick={confirmDelete}
                                 disabled={deleting}
                             >
-                                {deleting ? "Deleting..." : "Yes, Delete"}
+                                {deleting
+                                    ? "Deleting..."
+                                    : "Yes, Delete"}
                             </button>
+
                         </div>
                     </div>
                 </div>
             )}
 
+            {/* STATISTICS */}
             <div className="dashboard-grid">
+
                 <div className="stat-card">
+
                     <div className="stat-icon">
                         <FaCalendarAlt />
                     </div>
+
                     <h3>Total Events</h3>
+
                     <p>{events.length}</p>
+
                 </div>
 
                 <div className="stat-card">
+
                     <div className="stat-icon">
                         <FaClock />
                     </div>
+
                     <h3>Upcoming Events</h3>
+
                     <p>{upcomingEvents}</p>
+
                 </div>
 
                 <div className="stat-card">
+
                     <div className="stat-icon">
                         <FaUsers />
                     </div>
+
                     <h3>This Month</h3>
+
                     <p>{thisMonthEvents}</p>
+
                 </div>
+
             </div>
 
+            {/* ADD / EDIT FORM */}
             {showForm && canEditEvents && (
                 <div className="form-card">
+
                     <div className="section-header">
+
                         <div>
-                            <h2>{editingId ? "Edit Event" : "Add New Event"}</h2>
-                            <p>Enter the event details below.</p>
+                            <h2>
+                                {editingId
+                                    ? "Edit Event"
+                                    : "Add New Event"}
+                            </h2>
+
+                            <p>
+                                Enter the event details below.
+                            </p>
                         </div>
 
-                        <button className="icon-btn" onClick={resetForm}>
+                        <button
+                            className="icon-btn"
+                            onClick={resetForm}
+                        >
                             <FaTimes />
                         </button>
+
                     </div>
 
                     <form onSubmit={handleSubmit}>
+
                         <div className="form-grid">
+
+                            {/* TITLE */}
                             <div>
                                 <label>Event Title</label>
+
                                 <input
                                     name="title"
                                     value={formData.title}
                                     onChange={handleChange}
                                     placeholder="e.g. Sabbath Worship Service"
+                                    required
                                 />
                             </div>
 
+                            {/* EVENT TYPE */}
                             <div>
                                 <label>Event Type</label>
+
                                 <select
                                     name="event_type"
                                     value={formData.event_type}
                                     onChange={handleChange}
+                                    required
                                 >
-                                    <option value="Church Service">Church Service</option>
-                                    <option value="Sabbath School">Sabbath School</option>
-                                    <option value="Prayer Meeting">Prayer Meeting</option>
-                                    <option value="Youth Program">Youth Program</option>
-                                    <option value="Department Meeting">Department Meeting</option>
-                                    <option value="Evangelism">Evangelism</option>
-                                    <option value="Camp Meeting">Camp Meeting</option>
-                                    <option value="Other">Other</option>
+                                    <option value="Sabbath Program">
+                                        Sabbath Program
+                                    </option>
+
+                                    <option value="Midweek Service">
+                                        Midweek Service
+                                    </option>
+
+                                    <option value="Vespers">
+                                        Vespers
+                                    </option>
+
+                                    <option value="Seminar">
+                                        Seminar
+                                    </option>
+
+                                    <option value="Baptism">
+                                        Baptism
+                                    </option>
+
+                                    <option value="Department Meeting">
+                                        Department Meeting
+                                    </option>
+
+                                    <option value="Other">
+                                        Other
+                                    </option>
                                 </select>
                             </div>
 
+                            {/* DATE */}
                             <div>
                                 <label>Event Date</label>
+
                                 <input
                                     name="event_date"
                                     type="date"
                                     value={formData.event_date}
                                     onChange={handleChange}
+                                    required
                                 />
                             </div>
 
+                            {/* TIME */}
                             <div>
-                                <label>Start Time</label>
+                                <label>Event Time</label>
+
                                 <input
-                                    name="start_time"
+                                    name="event_time"
                                     type="time"
-                                    value={formData.start_time}
+                                    value={formData.event_time}
                                     onChange={handleChange}
                                 />
                             </div>
 
-                            <div>
-                                <label>End Time</label>
-                                <input
-                                    name="end_time"
-                                    type="time"
-                                    value={formData.end_time}
-                                    onChange={handleChange}
-                                />
-                            </div>
-
+                            {/* LOCATION */}
                             <div>
                                 <label>Location</label>
+
                                 <input
                                     name="location"
                                     value={formData.location}
@@ -475,18 +607,24 @@ const Events = () => {
                                 />
                             </div>
 
+                            {/* DEPARTMENT */}
                             <div>
-                                <label>Organizer</label>
+                                <label>Department ID</label>
+
                                 <input
-                                    name="organizer"
-                                    value={formData.organizer}
+                                    name="department_id"
+                                    type="number"
+                                    value={formData.department_id}
                                     onChange={handleChange}
-                                    placeholder="e.g. Youth Department"
+                                    placeholder="Optional"
                                 />
                             </div>
 
+                            {/* DESCRIPTION */}
                             <div className="full-width">
+
                                 <label>Description</label>
+
                                 <textarea
                                     name="description"
                                     value={formData.description}
@@ -494,10 +632,13 @@ const Events = () => {
                                     rows="3"
                                     placeholder="Describe the event"
                                 ></textarea>
+
                             </div>
+
                         </div>
 
                         <div className="form-actions">
+
                             <button
                                 type="button"
                                 className="secondary-btn"
@@ -512,27 +653,42 @@ const Events = () => {
                                 disabled={saving}
                             >
                                 <FaSave />
+
                                 {saving
                                     ? "Saving..."
                                     : editingId
                                     ? "Update Event"
                                     : "Save Event"}
                             </button>
+
                         </div>
+
                     </form>
+
                 </div>
             )}
 
+            {/* EVENTS TABLE */}
             <div className="table-card">
+
                 <div className="table-toolbar">
+
                     <div>
+
                         <h2>Church Events</h2>
-                        <p>{filteredEvents.length} event(s) found</p>
+
+                        <p>
+                            {filteredEvents.length} event(s) found
+                        </p>
+
                     </div>
 
                     <div className="toolbar-actions">
+
                         <div className="search-box">
+
                             <FaSearch />
+
                             <input
                                 value={searchTerm}
                                 onChange={(event) =>
@@ -540,74 +696,127 @@ const Events = () => {
                                 }
                                 placeholder="Search events..."
                             />
+
                         </div>
 
-                        <button className="secondary-btn" onClick={fetchEvents}>
+                        <button
+                            className="secondary-btn"
+                            onClick={fetchEvents}
+                        >
                             <FaSyncAlt /> Refresh
                         </button>
+
                     </div>
+
                 </div>
 
+                {/* LOADING */}
                 {loading ? (
-                    <div className="loading-box">Loading events...</div>
-                ) : filteredEvents.length === 0 ? (
-                    <div className="empty-state">
-                        <FaCalendarAlt />
-                        <h3>No events found</h3>
-                        <p>Add an event to get started.</p>
+                    <div className="loading-box">
+                        Loading events...
                     </div>
+
+                ) : filteredEvents.length === 0 ? (
+
+                    <div className="empty-state">
+
+                        <FaCalendarAlt />
+
+                        <h3>No events found</h3>
+
+                        <p>
+                            Add an event to get started.
+                        </p>
+
+                    </div>
+
                 ) : (
+
                     <div className="table-wrapper">
+
                         <table className="data-table">
+
                             <thead>
+
                                 <tr>
                                     <th>Event</th>
                                     <th>Type</th>
                                     <th>Date</th>
                                     <th>Time</th>
                                     <th>Location</th>
-                                    {canEditEvents && <th>Actions</th>}
+
+                                    {canEditEvents && (
+                                        <th>Actions</th>
+                                    )}
                                 </tr>
+
                             </thead>
 
                             <tbody>
+
                                 {filteredEvents.map((event) => (
-                                    <tr key={getEventId(event)}>
+
+                                    <tr
+                                        key={getEventId(event)}
+                                    >
+
                                         <td>
-                                            <strong>{getEventTitle(event)}</strong>
+
+                                            <strong>
+                                                {getEventTitle(event)}
+                                            </strong>
+
                                             <br />
-                                            <small>{event.description || ""}</small>
+
+                                            <small>
+                                                {event.description || ""}
+                                            </small>
+
                                         </td>
 
                                         <td>
+
                                             <span className="status-badge">
                                                 {getEventType(event)}
                                             </span>
+
                                         </td>
 
                                         <td>
-                                            {formatDate(event.event_date || event.date) ||
-                                                "-"}
+                                            {formatDate(
+                                                event.event_date
+                                            ) || "-"}
                                         </td>
 
                                         <td>
+
                                             <FaClock />{" "}
-                                            {formatTime(event.start_time) || "-"}
-                                            {event.end_time
-                                                ? ` - ${formatTime(event.end_time)}`
-                                                : ""}
+
+                                            {formatTime(
+                                                event.event_time
+                                            ) || "-"}
+
                                         </td>
 
                                         <td>
-                                            <FaMapMarkerAlt /> {event.location || "-"}
+
+                                            <FaMapMarkerAlt />{" "}
+
+                                            {event.location || "-"}
+
                                         </td>
 
                                         {canEditEvents && (
+
                                             <td>
+
                                                 <div className="table-actions-inline">
+
                                                     <button
                                                         className="table-action-btn"
-                                                        onClick={() => handleEdit(event)}
+                                                        onClick={() =>
+                                                            handleEdit(event)
+                                                        }
                                                     >
                                                         <FaEdit /> Edit
                                                     </button>
@@ -615,21 +824,34 @@ const Events = () => {
                                                     <button
                                                         className="table-delete-btn"
                                                         onClick={() =>
-                                                            openDeleteModal(event)
+                                                            openDeleteModal(
+                                                                event
+                                                            )
                                                         }
                                                     >
                                                         <FaTrash /> Delete
                                                     </button>
+
                                                 </div>
+
                                             </td>
+
                                         )}
+
                                     </tr>
+
                                 ))}
+
                             </tbody>
+
                         </table>
+
                     </div>
+
                 )}
+
             </div>
+
         </div>
     );
 };

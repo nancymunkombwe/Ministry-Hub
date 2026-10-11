@@ -5,7 +5,8 @@ const {
     createUser,
     updateUser,
     updateUserStatus,
-    deactivateUser
+    deactivateUser,
+    deleteUser
 } = require("../controllers/userController");
 
 const { protect, authorize } = require("../middleware/authMiddleware");
@@ -22,6 +23,6 @@ router.put("/:id", protect, authorize("admin"), updateUser);
 
 router.patch("/:id/status", protect, authorize("admin"), updateUserStatus);
 
-router.delete("/:id", protect, authorize("admin"), deactivateUser);
+router.delete("/:id", protect, authorize("admin"), deleteUser);
 
 module.exports = router;

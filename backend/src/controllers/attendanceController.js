@@ -1,6 +1,18 @@
 const db = require("../config/db");
 
+const ALLOWED_SERVICE_TYPES = [
+    "Sabbath Service",
+    "Sabbath School",
+    "Midweek Service",
+    "Vespers",
+    "Department Meeting",
+    "Special Program",
+    "Other"
+];
+
+// =====================================================
 // CREATE ATTENDANCE SESSION
+// =====================================================
 const createAttendanceSession = (req, res) => {
     const {
         session_date,
@@ -16,17 +28,7 @@ const createAttendanceSession = (req, res) => {
         });
     }
 
-    const allowedServiceTypes = [
-        "Sabbath Service",
-        "Sabbath School",
-        "Midweek Service",
-        "Vespers",
-        "Department Meeting",
-        "Special Program",
-        "Other"
-    ];
-
-    if (!allowedServiceTypes.includes(service_type)) {
+    if (!ALLOWED_SERVICE_TYPES.includes(service_type)) {
         return res.status(400).json({
             success: false,
             message: "Invalid service type"
@@ -54,14 +56,15 @@ const createAttendanceSession = (req, res) => {
 
     db.query(sql, values, (error, result) => {
         if (error) {
+            console.error("Create attendance session error:", error);
+
             return res.status(500).json({
                 success: false,
-                message: "Failed to create attendance session",
-                error: error.message
+                message: "Failed to create attendance session"
             });
         }
 
-        res.status(201).json({
+        return res.status(201).json({
             success: true,
             message: "Attendance session created successfully",
             session_id: result.insertId
@@ -69,33 +72,42 @@ const createAttendanceSession = (req, res) => {
     });
 };
 
+// =====================================================
 // GET ALL ATTENDANCE SESSIONS
+// =====================================================
 const getAttendanceSessions = (req, res) => {
     const sql = `
         SELECT
             s.id,
             s.session_date,
             s.service_type,
+            s.department_id,
             s.notes,
+            s.created_by,
             s.created_at,
             d.name AS department_name,
             u.full_name AS created_by_name
         FROM attendance_sessions s
-        LEFT JOIN departments d ON s.department_id = d.id
-        LEFT JOIN users u ON s.created_by = u.id
-        ORDER BY s.session_date DESC, s.created_at DESC
+        LEFT JOIN departments d
+            ON s.department_id = d.id
+        LEFT JOIN users u
+            ON s.created_by = u.id
+        ORDER BY
+            s.session_date DESC,
+            s.created_at DESC
     `;
 
     db.query(sql, (error, results) => {
         if (error) {
+            console.error("Get attendance sessions error:", error);
+
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch attendance sessions",
-                error: error.message
+                message: "Failed to fetch attendance sessions"
             });
         }
 
-        res.json({
+        return res.json({
             success: true,
             count: results.length,
             sessions: results
@@ -103,12 +115,123 @@ const getAttendanceSessions = (req, res) => {
     });
 };
 
+// =====================================================
+// DELETE ATTENDANCE SESSION
+// =====================================================
+const deleteAttendanceSession = (req, res) => {
+    const { sessionId } = req.params;
+
+    if (!sessionId) {
+        return res.status(400).json({
+            success: false,
+            message: "Session ID is required"
+        });
+    }
+
+    // First confirm that the session exists.
+    const findSessionSql = `
+        SELECT id
+        FROM attendance_sessions
+        WHERE id = ?
+        LIMIT 1
+    `;
+
+    db.query(
+        findSessionSql,
+        [sessionId],
+        (findError, sessions) => {
+            if (findError) {
+                console.error(
+                    "Find attendance session error:",
+                    findError
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    message: "Failed to find attendance session"
+                });
+            }
+
+            if (sessions.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Attendance session not found"
+                });
+            }
+
+            // Delete attendance records belonging to this session.
+            const deleteRecordsSql = `
+                DELETE FROM attendance_records
+                WHERE session_id = ?
+            `;
+
+            db.query(
+                deleteRecordsSql,
+                [sessionId],
+                (recordsError, recordsResult) => {
+                    if (recordsError) {
+                        console.error(
+                            "Delete attendance records error:",
+                            recordsError
+                        );
+
+                        return res.status(500).json({
+                            success: false,
+                            message:
+                                "Failed to delete attendance records"
+                        });
+                    }
+
+                    // Now delete the session itself.
+                    const deleteSessionSql = `
+                        DELETE FROM attendance_sessions
+                        WHERE id = ?
+                    `;
+
+                    db.query(
+                        deleteSessionSql,
+                        [sessionId],
+                        (sessionError, sessionResult) => {
+                            if (sessionError) {
+                                console.error(
+                                    "Delete attendance session error:",
+                                    sessionError
+                                );
+
+                                return res.status(500).json({
+                                    success: false,
+                                    message:
+                                        "Attendance records were removed, but the session could not be deleted"
+                                });
+                            }
+
+                            return res.json({
+                                success: true,
+                                message:
+                                    "Attendance session deleted successfully",
+                                deleted_session_id: sessionId,
+                                deleted_records:
+                                    recordsResult.affectedRows,
+                                deleted_sessions:
+                                    sessionResult.affectedRows
+                            });
+                        }
+                    );
+                }
+            );
+        }
+    );
+};
+
+// =====================================================
 // MARK OR UPDATE MEMBER ATTENDANCE
+// =====================================================
 const markAttendance = (req, res) => {
     const {
         session_id,
         member_id,
-        status
+        status,
+        remarks
     } = req.body;
 
     if (!session_id || !member_id) {
@@ -127,43 +250,132 @@ const markAttendance = (req, res) => {
         });
     }
 
-    const sql = `
-        INSERT INTO attendance_records (
-            session_id,
-            member_id,
-            status
-        )
-        VALUES (?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-            status = VALUES(status),
-            marked_at = CURRENT_TIMESTAMP
+    const findSql = `
+        SELECT id
+        FROM attendance_records
+        WHERE session_id = ?
+          AND member_id = ?
+        LIMIT 1
     `;
 
-    const values = [
-        session_id,
-        member_id,
-        attendanceStatus
-    ];
+    db.query(
+        findSql,
+        [session_id, member_id],
+        (findError, existingRecords) => {
+            if (findError) {
+                console.error(
+                    "Find attendance record error:",
+                    findError
+                );
 
-    db.query(sql, values, (error) => {
-        if (error) {
-            return res.status(500).json({
-                success: false,
-                message: "Failed to mark attendance",
-                error: error.message
-            });
+                return res.status(500).json({
+                    success: false,
+                    message:
+                        "Failed to check existing attendance record"
+                });
+            }
+
+            if (existingRecords.length > 0) {
+                const recordId = existingRecords[0].id;
+
+                const updateSql = `
+                    UPDATE attendance_records
+                    SET
+                        status = ?,
+                        remarks = ?,
+                        marked_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                `;
+
+                db.query(
+                    updateSql,
+                    [
+                        attendanceStatus,
+                        remarks || null,
+                        recordId
+                    ],
+                    (updateError) => {
+                        if (updateError) {
+                            console.error(
+                                "Update attendance record error:",
+                                updateError
+                            );
+
+                            return res.status(500).json({
+                                success: false,
+                                message:
+                                    "Failed to update attendance"
+                            });
+                        }
+
+                        return res.json({
+                            success: true,
+                            message:
+                                "Attendance updated successfully",
+                            record_id: recordId
+                        });
+                    }
+                );
+
+                return;
+            }
+
+            const insertSql = `
+                INSERT INTO attendance_records (
+                    session_id,
+                    member_id,
+                    status,
+                    remarks
+                )
+                VALUES (?, ?, ?, ?)
+            `;
+
+            db.query(
+                insertSql,
+                [
+                    session_id,
+                    member_id,
+                    attendanceStatus,
+                    remarks || null
+                ],
+                (insertError, result) => {
+                    if (insertError) {
+                        console.error(
+                            "Insert attendance record error:",
+                            insertError
+                        );
+
+                        return res.status(500).json({
+                            success: false,
+                            message:
+                                "Failed to mark attendance"
+                        });
+                    }
+
+                    return res.status(201).json({
+                        success: true,
+                        message:
+                            "Attendance marked successfully",
+                        record_id: result.insertId
+                    });
+                }
+            );
         }
-
-        res.json({
-            success: true,
-            message: "Attendance marked successfully"
-        });
-    });
+    );
 };
 
+// =====================================================
 // GET ATTENDANCE RECORDS FOR ONE SESSION
+// =====================================================
 const getSessionAttendance = (req, res) => {
     const { sessionId } = req.params;
+
+    if (!sessionId) {
+        return res.status(400).json({
+            success: false,
+            message: "Session ID is required"
+        });
+    }
 
     const sql = `
         SELECT
@@ -171,27 +383,36 @@ const getSessionAttendance = (req, res) => {
             ar.session_id,
             ar.member_id,
             ar.status,
+            ar.remarks,
             ar.marked_at,
             m.first_name,
             m.last_name,
             m.gender,
             m.phone
         FROM attendance_records ar
-        JOIN members m ON ar.member_id = m.id
+        JOIN members m
+            ON ar.member_id = m.id
         WHERE ar.session_id = ?
-        ORDER BY m.last_name ASC, m.first_name ASC
+        ORDER BY
+            m.last_name ASC,
+            m.first_name ASC
     `;
 
     db.query(sql, [sessionId], (error, results) => {
         if (error) {
+            console.error(
+                "Get session attendance error:",
+                error
+            );
+
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch session attendance",
-                error: error.message
+                message:
+                    "Failed to fetch session attendance"
             });
         }
 
-        res.json({
+        return res.json({
             success: true,
             count: results.length,
             records: results
@@ -199,35 +420,57 @@ const getSessionAttendance = (req, res) => {
     });
 };
 
+// =====================================================
 // GET ATTENDANCE HISTORY FOR ONE MEMBER
+// =====================================================
 const getMemberAttendanceHistory = (req, res) => {
     const { memberId } = req.params;
+
+    if (!memberId) {
+        return res.status(400).json({
+            success: false,
+            message: "Member ID is required"
+        });
+    }
 
     const sql = `
         SELECT
             ar.id,
+            ar.session_id,
+            ar.member_id,
             ar.status,
+            ar.remarks,
             ar.marked_at,
             s.session_date,
             s.service_type,
+            s.notes AS session_notes,
             d.name AS department_name
         FROM attendance_records ar
-        JOIN attendance_sessions s ON ar.session_id = s.id
-        LEFT JOIN departments d ON s.department_id = d.id
+        JOIN attendance_sessions s
+            ON ar.session_id = s.id
+        LEFT JOIN departments d
+            ON s.department_id = d.id
         WHERE ar.member_id = ?
-        ORDER BY s.session_date DESC
+        ORDER BY
+            s.session_date DESC,
+            ar.marked_at DESC
     `;
 
     db.query(sql, [memberId], (error, results) => {
         if (error) {
+            console.error(
+                "Get member attendance history error:",
+                error
+            );
+
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch member attendance history",
-                error: error.message
+                message:
+                    "Failed to fetch member attendance history"
             });
         }
 
-        res.json({
+        return res.json({
             success: true,
             count: results.length,
             attendance_history: results
@@ -235,7 +478,9 @@ const getMemberAttendanceHistory = (req, res) => {
     });
 };
 
+// =====================================================
 // MISSING MEMBER ALERT
+// =====================================================
 const getMissingMembers = (req, res) => {
     const sql = `
         SELECT
@@ -248,10 +493,12 @@ const getMissingMembers = (req, res) => {
             m.follow_up_status,
             COUNT(ar.id) AS missed_services
         FROM members m
-        JOIN attendance_records ar ON m.id = ar.member_id
-        JOIN attendance_sessions s ON ar.session_id = s.id
+        JOIN attendance_records ar
+            ON m.id = ar.member_id
+        JOIN attendance_sessions s
+            ON ar.session_id = s.id
         WHERE ar.status = 'Absent'
-        AND s.session_date >= DATE_SUB(CURDATE(), INTERVAL 60 DAY)
+          AND s.session_date >= DATE_SUB(CURDATE(), INTERVAL 60 DAY)
         GROUP BY
             m.id,
             m.first_name,
@@ -266,17 +513,22 @@ const getMissingMembers = (req, res) => {
 
     db.query(sql, (error, results) => {
         if (error) {
+            console.error(
+                "Get missing members error:",
+                error
+            );
+
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch missing members",
-                error: error.message
+                message: "Failed to fetch missing members"
             });
         }
 
-        res.json({
+        return res.json({
             success: true,
             count: results.length,
-            message: "Members who missed 3 or more services in the last 60 days",
+            message:
+                "Members who missed 3 or more services in the last 60 days",
             missing_members: results
         });
     });
@@ -285,6 +537,7 @@ const getMissingMembers = (req, res) => {
 module.exports = {
     createAttendanceSession,
     getAttendanceSessions,
+    deleteAttendanceSession,
     markAttendance,
     getSessionAttendance,
     getMemberAttendanceHistory,

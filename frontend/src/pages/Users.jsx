@@ -9,7 +9,8 @@ import {
     FaUserShield,
     FaUserCheck,
     FaUserSlash,
-    FaUsers
+    FaUsers,
+    FaTrash
 } from "react-icons/fa";
 
 import API from "../api/api";
@@ -31,6 +32,8 @@ const Users = () => {
 
     const [showForm, setShowForm] = useState(false);
     const [userToToggle, setUserToToggle] = useState(null);
+    const [userToDelete, setUserToDelete] = useState(null);
+    const [deletingUser, setDeletingUser] = useState(false);
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -217,6 +220,31 @@ const Users = () => {
         setUserToToggle(null);
     };
 
+    const handleDeleteUser = (user) => {
+        if (!getUserId(user)) return;
+        setUserToDelete(user);
+        setError("");
+        setSuccess("");
+    };
+
+    const confirmDeleteUser = async () => {
+        if (!userToDelete) return;
+        const userId = getUserId(userToDelete);
+        setDeletingUser(true);
+        setError("");
+        setSuccess("");
+        try {
+            await API.delete(`/users/${userId}`);
+            setSuccess("User deleted successfully.");
+            setUserToDelete(null);
+            await fetchUsers();
+        } catch (error) {
+            setError(error.response?.data?.message || "Failed to delete user.");
+        } finally {
+            setDeletingUser(false);
+        }
+    };
+
     const confirmStatusChange = async () => {
         if (!userToToggle) return;
 
@@ -268,6 +296,32 @@ const Users = () => {
 
             {error && <div className="page-error">{error}</div>}
             {success && <div className="success-message">{success}</div>}
+
+            {userToDelete && (
+                <div className="modal-overlay">
+                    <div className="delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-user-title">
+                        <div className="delete-modal-icon">
+                            <FaTrash />
+                        </div>
+                        <h2 id="delete-user-title">Delete User?</h2>
+                        <p>
+                            Are you sure you want to permanently delete{" "}
+                            <strong>{userToDelete.full_name}</strong>?
+                        </p>
+                        <p className="delete-warning">
+                            This action cannot be undone. Related activity records will be retained where supported by the database.
+                        </p>
+                        <div className="delete-modal-actions">
+                            <button className="secondary-btn" onClick={() => setUserToDelete(null)} disabled={deletingUser}>
+                                Cancel
+                            </button>
+                            <button className="danger-btn" onClick={confirmDeleteUser} disabled={deletingUser}>
+                                {deletingUser ? "Deleting..." : "Yes, Delete"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {userToToggle && (
                 <div className="modal-overlay">
@@ -566,6 +620,15 @@ const Users = () => {
                                                             <FaUserCheck /> Activate
                                                         </>
                                                     )}
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    className="table-delete-btn"
+                                                    onClick={() => handleDeleteUser(user)}
+                                                    title="Permanently delete user"
+                                                >
+                                                    <FaTrash /> Delete
                                                 </button>
                                             </div>
                                         </td>

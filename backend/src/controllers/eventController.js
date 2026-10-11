@@ -1,7 +1,26 @@
 const db = require("../config/db");
 
+// =====================================================
+// ALLOWED EVENT TYPES
+// =====================================================
+
+const allowedEventTypes = [
+    "Sabbath Program",
+    "Midweek Service",
+    "Vespers",
+    "Seminar",
+    "Baptism",
+    "Department Meeting",
+    "Other"
+];
+
+
+// =====================================================
 // CREATE EVENT
+// =====================================================
+
 const createEvent = (req, res) => {
+
     const {
         title,
         description,
@@ -12,31 +31,37 @@ const createEvent = (req, res) => {
         department_id
     } = req.body;
 
-    if (!title || !event_date) {
+
+    // -----------------------------
+    // VALIDATION
+    // -----------------------------
+
+    if (!title || !title.trim() || !event_date) {
+
         return res.status(400).json({
             success: false,
             message: "Event title and event date are required"
         });
+
     }
 
-    const allowedEventTypes = [
-        "Sabbath Program",
-        "Midweek Service",
-        "Vespers",
-        "Seminar",
-        "Baptism",
-        "Department Meeting",
-        "Other"
-    ];
 
     const selectedEventType = event_type || "Other";
 
+
     if (!allowedEventTypes.includes(selectedEventType)) {
+
         return res.status(400).json({
             success: false,
             message: "Invalid event type"
         });
+
     }
+
+
+    // =====================================================
+    // INSERT
+    // =====================================================
 
     const sql = `
         INSERT INTO events (
@@ -52,9 +77,10 @@ const createEvent = (req, res) => {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
+
     const values = [
-        title,
-        description || null,
+        title.trim(),
+        description ? description.trim() : null,
         selectedEventType,
         event_date,
         event_time || null,
@@ -63,63 +89,41 @@ const createEvent = (req, res) => {
         req.user.id
     ];
 
+
     db.query(sql, values, (error, result) => {
+
         if (error) {
+
+            console.error(
+                "CREATE EVENT ERROR:",
+                error
+            );
+
             return res.status(500).json({
                 success: false,
                 message: "Failed to create event",
                 error: error.message
             });
+
         }
 
-        res.status(201).json({
+
+        return res.status(201).json({
             success: true,
             message: "Event created successfully",
             event_id: result.insertId
         });
+
     });
+
 };
 
+
+// =====================================================
 // GET ALL EVENTS
+// =====================================================
+
 const getEvents = (req, res) => {
-    const sql = `
-        SELECT
-            e.id,
-            e.title,
-            e.description,
-            e.event_type,
-            e.event_date,
-            e.event_time,
-            e.location,
-            e.created_at,
-            d.name AS department_name,
-            u.full_name AS created_by_name
-        FROM events e
-        LEFT JOIN departments d ON e.department_id = d.id
-        LEFT JOIN users u ON e.created_by = u.id
-        ORDER BY e.event_date DESC, e.event_time DESC
-    `;
-
-    db.query(sql, (error, results) => {
-        if (error) {
-            return res.status(500).json({
-                success: false,
-                message: "Failed to fetch events",
-                error: error.message
-            });
-        }
-
-        res.json({
-            success: true,
-            count: results.length,
-            events: results
-        });
-    });
-};
-
-// GET ONE EVENT
-const getEventById = (req, res) => {
-    const { id } = req.params;
 
     const sql = `
         SELECT
@@ -133,40 +137,138 @@ const getEventById = (req, res) => {
             e.department_id,
             e.created_by,
             e.created_at,
+
             d.name AS department_name,
+
             u.full_name AS created_by_name
+
         FROM events e
-        LEFT JOIN departments d ON e.department_id = d.id
-        LEFT JOIN users u ON e.created_by = u.id
+
+        LEFT JOIN departments d
+            ON e.department_id = d.id
+
+        LEFT JOIN users u
+            ON e.created_by = u.id
+
+        ORDER BY
+            e.event_date DESC,
+            e.event_time DESC
+    `;
+
+
+    db.query(sql, (error, results) => {
+
+        if (error) {
+
+            console.error(
+                "GET EVENTS ERROR:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                message: "Failed to fetch events",
+                error: error.message
+            });
+
+        }
+
+
+        return res.json({
+            success: true,
+            count: results.length,
+            events: results
+        });
+
+    });
+
+};
+
+
+// =====================================================
+// GET ONE EVENT
+// =====================================================
+
+const getEventById = (req, res) => {
+
+    const { id } = req.params;
+
+
+    const sql = `
+        SELECT
+            e.id,
+            e.title,
+            e.description,
+            e.event_type,
+            e.event_date,
+            e.event_time,
+            e.location,
+            e.department_id,
+            e.created_by,
+            e.created_at,
+
+            d.name AS department_name,
+
+            u.full_name AS created_by_name
+
+        FROM events e
+
+        LEFT JOIN departments d
+            ON e.department_id = d.id
+
+        LEFT JOIN users u
+            ON e.created_by = u.id
+
         WHERE e.id = ?
     `;
 
+
     db.query(sql, [id], (error, results) => {
+
         if (error) {
+
+            console.error(
+                "GET EVENT ERROR:",
+                error
+            );
+
             return res.status(500).json({
                 success: false,
                 message: "Failed to fetch event",
                 error: error.message
             });
+
         }
 
+
         if (results.length === 0) {
+
             return res.status(404).json({
                 success: false,
                 message: "Event not found"
             });
+
         }
 
-        res.json({
+
+        return res.json({
             success: true,
             event: results[0]
         });
+
     });
+
 };
 
+
+// =====================================================
 // UPDATE EVENT
+// =====================================================
+
 const updateEvent = (req, res) => {
+
     const { id } = req.params;
+
 
     const {
         title,
@@ -178,12 +280,37 @@ const updateEvent = (req, res) => {
         department_id
     } = req.body;
 
-    if (!title || !event_date) {
+
+    // -----------------------------
+    // VALIDATION
+    // -----------------------------
+
+    if (!title || !title.trim() || !event_date) {
+
         return res.status(400).json({
             success: false,
             message: "Event title and event date are required"
         });
+
     }
+
+
+    const selectedEventType = event_type || "Other";
+
+
+    if (!allowedEventTypes.includes(selectedEventType)) {
+
+        return res.status(400).json({
+            success: false,
+            message: "Invalid event type"
+        });
+
+    }
+
+
+    // =====================================================
+    // UPDATE
+    // =====================================================
 
     const sql = `
         UPDATE events
@@ -198,10 +325,11 @@ const updateEvent = (req, res) => {
         WHERE id = ?
     `;
 
+
     const values = [
-        title,
-        description || null,
-        event_type || "Other",
+        title.trim(),
+        description ? description.trim() : null,
+        selectedEventType,
         event_date,
         event_time || null,
         location || null,
@@ -209,58 +337,102 @@ const updateEvent = (req, res) => {
         id
     ];
 
+
     db.query(sql, values, (error, result) => {
+
         if (error) {
+
+            console.error(
+                "UPDATE EVENT ERROR:",
+                error
+            );
+
             return res.status(500).json({
                 success: false,
                 message: "Failed to update event",
                 error: error.message
             });
+
         }
 
+
         if (result.affectedRows === 0) {
+
             return res.status(404).json({
                 success: false,
                 message: "Event not found"
             });
+
         }
 
-        res.json({
+
+        return res.json({
             success: true,
             message: "Event updated successfully"
         });
+
     });
+
 };
 
+
+// =====================================================
 // DELETE EVENT
+// =====================================================
+
 const deleteEvent = (req, res) => {
+
     const { id } = req.params;
 
-    db.query("DELETE FROM events WHERE id = ?", [id], (error, result) => {
-        if (error) {
-            return res.status(500).json({
-                success: false,
-                message: "Failed to delete event",
-                error: error.message
-            });
-        }
 
-        if (result.affectedRows === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Event not found"
-            });
-        }
+    db.query(
+        "DELETE FROM events WHERE id = ?",
+        [id],
+        (error, result) => {
 
-        res.json({
-            success: true,
-            message: "Event deleted successfully"
-        });
-    });
+            if (error) {
+
+                console.error(
+                    "DELETE EVENT ERROR:",
+                    error
+                );
+
+                return res.status(500).json({
+                    success: false,
+                    message: "Failed to delete event",
+                    error: error.message
+                });
+
+            }
+
+
+            if (result.affectedRows === 0) {
+
+                return res.status(404).json({
+                    success: false,
+                    message: "Event not found"
+                });
+
+            }
+
+
+            return res.json({
+                success: true,
+                message: "Event deleted successfully"
+            });
+
+        }
+    );
+
 };
 
+
+// =====================================================
 // ADD PROGRAM ITEM
+// =====================================================
+
 const createProgramItem = (req, res) => {
+
     const {
         event_id,
         item_order,
@@ -270,12 +442,17 @@ const createProgramItem = (req, res) => {
         notes
     } = req.body;
 
+
     if (!event_id || !item_order || !item_title) {
+
         return res.status(400).json({
             success: false,
-            message: "Event ID, item order, and item title are required"
+            message:
+                "Event ID, item order, and item title are required"
         });
+
     }
+
 
     const sql = `
         INSERT INTO program_items (
@@ -289,6 +466,7 @@ const createProgramItem = (req, res) => {
         VALUES (?, ?, ?, ?, ?, ?)
     `;
 
+
     const values = [
         event_id,
         item_order,
@@ -298,26 +476,44 @@ const createProgramItem = (req, res) => {
         notes || null
     ];
 
+
     db.query(sql, values, (error, result) => {
+
         if (error) {
+
+            console.error(
+                "CREATE PROGRAM ITEM ERROR:",
+                error
+            );
+
             return res.status(500).json({
                 success: false,
                 message: "Failed to create program item",
                 error: error.message
             });
+
         }
 
-        res.status(201).json({
+
+        return res.status(201).json({
             success: true,
             message: "Program item added successfully",
             program_item_id: result.insertId
         });
+
     });
+
 };
 
-// GET PROGRAM ITEMS FOR ONE EVENT
+
+// =====================================================
+// GET PROGRAM ITEMS
+// =====================================================
+
 const getProgramItems = (req, res) => {
+
     const { eventId } = req.params;
+
 
     const sql = `
         SELECT *
@@ -326,22 +522,39 @@ const getProgramItems = (req, res) => {
         ORDER BY item_order ASC
     `;
 
+
     db.query(sql, [eventId], (error, results) => {
+
         if (error) {
+
+            console.error(
+                "GET PROGRAM ITEMS ERROR:",
+                error
+            );
+
             return res.status(500).json({
                 success: false,
                 message: "Failed to fetch program items",
                 error: error.message
             });
+
         }
 
-        res.json({
+
+        return res.json({
             success: true,
             count: results.length,
             program_items: results
         });
+
     });
+
 };
+
+
+// =====================================================
+// EXPORT
+// =====================================================
 
 module.exports = {
     createEvent,

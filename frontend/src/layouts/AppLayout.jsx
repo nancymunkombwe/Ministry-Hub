@@ -42,7 +42,7 @@ const AppLayout = () => {
         },
         {
             path: "/departments",
-            label: "Departments",
+            label: "Ministries",
             icon: <FaLayerGroup />
         },
         {
@@ -90,7 +90,10 @@ const AppLayout = () => {
         }
     ];
 
-    const visibleNavItems = role === "admin" ? [...navItems, ...adminItems] : navItems;
+    const visibleNavItems =
+        role === "admin"
+            ? [...navItems, ...adminItems]
+            : navItems;
 
     return (
         <div className="app-layout">
@@ -99,14 +102,20 @@ const AppLayout = () => {
                     <BrandLogo size="sidebar" />
 
                     <div className="user-pill">
-                        <span>{user?.full_name || "Admin User"}</span>
+                        <span>
+                            {user?.full_name || "Admin User"}
+                        </span>
+
                         <small>{role}</small>
                     </div>
                 </div>
 
                 <nav className="sidebar-nav">
                     {visibleNavItems.map((item) => (
-                        <NavLink key={item.path} to={item.path}>
+                        <NavLink
+                            key={item.path}
+                            to={item.path}
+                        >
                             {item.icon}
                             <span>{item.label}</span>
                         </NavLink>
@@ -116,7 +125,10 @@ const AppLayout = () => {
                 <div className="sidebar-bottom">
                     <SdaFooter />
 
-                    <button onClick={logout} className="sidebar-logout">
+                    <button
+                        onClick={logout}
+                        className="sidebar-logout"
+                    >
                         <FaSignOutAlt />
                         <span>Logout</span>
                     </button>

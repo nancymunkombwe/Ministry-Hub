@@ -61,6 +61,13 @@ const Departments = () => {
         }, 100);
     };
 
+    /*
+     * NOTE:
+     * The backend still uses /departments and department_name.
+     * We are changing the user-facing terminology to "Ministries"
+     * without breaking the existing backend.
+     */
+
     const getDepartmentId = (department) => {
         return department.id || department.department_id;
     };
@@ -70,7 +77,7 @@ const Departments = () => {
             department.department_name ||
             department.name ||
             department.title ||
-            "Department"
+            "Ministry"
         );
     };
 
@@ -90,11 +97,15 @@ const Departments = () => {
                 response.data.data ||
                 response.data;
 
-            setDepartments(Array.isArray(departmentList) ? departmentList : []);
+            setDepartments(
+                Array.isArray(departmentList)
+                    ? departmentList
+                    : []
+            );
         } catch (error) {
             setError(
                 error.response?.data?.message ||
-                    "Failed to load departments. Please check if the backend is running."
+                    "Failed to load ministries. Please check if the backend is running."
             );
         } finally {
             setLoading(false);
@@ -115,16 +126,20 @@ const Departments = () => {
                 ${department.status || ""}
             `.toLowerCase();
 
-            return searchableText.includes(searchTerm.toLowerCase());
+            return searchableText.includes(
+                searchTerm.toLowerCase()
+            );
         });
     }, [departments, searchTerm]);
 
     const activeDepartments = departments.filter(
-        (department) => getDepartmentStatus(department) === "Active"
+        (department) =>
+            getDepartmentStatus(department) === "Active"
     ).length;
 
     const inactiveDepartments = departments.filter(
-        (department) => getDepartmentStatus(department) === "Inactive"
+        (department) =>
+            getDepartmentStatus(department) === "Inactive"
     ).length;
 
     const handleChange = (event) => {
@@ -147,6 +162,7 @@ const Departments = () => {
         setShowForm(true);
         setError("");
         setSuccess("");
+
         scrollToForm();
     };
 
@@ -170,13 +186,14 @@ const Departments = () => {
         setSuccess("");
 
         if (!formData.department_name.trim()) {
-            setError("Department name is required.");
+            setError("Ministry name is required.");
             setSaving(false);
             return;
         }
 
         try {
             const payload = {
+                // Keep backend field names unchanged
                 department_name: formData.department_name,
                 name: formData.department_name,
                 description: formData.description,
@@ -186,11 +203,23 @@ const Departments = () => {
             };
 
             if (editingId) {
-                await API.put(`/departments/${editingId}`, payload);
-                setSuccess("Department updated successfully.");
+                await API.put(
+                    `/departments/${editingId}`,
+                    payload
+                );
+
+                setSuccess(
+                    "Ministry updated successfully."
+                );
             } else {
-                await API.post("/departments", payload);
-                setSuccess("Department created successfully.");
+                await API.post(
+                    "/departments",
+                    payload
+                );
+
+                setSuccess(
+                    "Ministry created successfully."
+                );
             }
 
             resetForm();
@@ -198,7 +227,7 @@ const Departments = () => {
         } catch (error) {
             setError(
                 error.response?.data?.message ||
-                    "Failed to save department. Please try again."
+                    "Failed to save ministry. Please try again."
             );
         } finally {
             setSaving(false);
@@ -211,18 +240,30 @@ const Departments = () => {
             return;
         }
 
-        setEditingId(getDepartmentId(department));
+        setEditingId(
+            getDepartmentId(department)
+        );
 
         setFormData({
-            department_name: getDepartmentName(department),
-            description: department.description || "",
-            leader_name: department.leader_name || department.leader || "",
-            status: department.status || "Active"
+            department_name:
+                getDepartmentName(department),
+
+            description:
+                department.description || "",
+
+            leader_name:
+                department.leader_name ||
+                department.leader ||
+                "",
+
+            status:
+                department.status || "Active"
         });
 
         setShowForm(true);
         setError("");
         setSuccess("");
+
         scrollToForm();
     };
 
@@ -249,28 +290,40 @@ const Departments = () => {
 
         if (!departmentToDelete) return;
 
-        const departmentId = getDepartmentId(departmentToDelete);
+        const departmentId =
+            getDepartmentId(departmentToDelete);
 
         setDeleting(true);
         setError("");
         setSuccess("");
 
         try {
-            await API.delete(`/departments/${departmentId}`);
-
-            setDepartments((previousDepartments) =>
-                previousDepartments.filter(
-                    (department) =>
-                        String(getDepartmentId(department)) !== String(departmentId)
-                )
+            await API.delete(
+                `/departments/${departmentId}`
             );
 
-            setSuccess("Department deleted successfully.");
+            setDepartments(
+                (previousDepartments) =>
+                    previousDepartments.filter(
+                        (department) =>
+                            String(
+                                getDepartmentId(
+                                    department
+                                )
+                            ) !==
+                            String(departmentId)
+                    )
+            );
+
+            setSuccess(
+                "Ministry deleted successfully."
+            );
+
             setDepartmentToDelete(null);
         } catch (error) {
             setError(
                 error.response?.data?.message ||
-                    "Failed to delete department. It may have members assigned to it."
+                    "Failed to delete ministry. It may have members assigned to it."
             );
         } finally {
             setDeleting(false);
@@ -279,44 +332,77 @@ const Departments = () => {
 
     return (
         <div className="page page-fade">
+
+            {/* PAGE HEADER */}
             <div className="page-header page-header-row">
                 <div>
-                    <span className="eyebrow">Church Organization</span>
-                    <h1>Departments</h1>
+                    <span className="eyebrow">
+                        Church Organization
+                    </span>
+
+                    <h1>Ministries</h1>
+
                     <p>
-                        Manage church departments such as Youth, Music, Sabbath
-                        School, and Pathfinders.
+                        Manage church ministries such as
+                        Youth, Music, Sabbath School,
+                        Pathfinders, and other ministry
+                        groups.
                     </p>
                 </div>
 
                 {canEditDepartments && (
-                    <button className="primary-btn" onClick={openAddForm}>
-                        <FaPlus /> Add Department
+                    <button
+                        className="primary-btn"
+                        onClick={openAddForm}
+                    >
+                        <FaPlus />
+                        Add Ministry
                     </button>
                 )}
             </div>
 
+            {/* PERMISSION MESSAGE */}
             {!canEditDepartments && (
                 <div className="info-message">
                     {getNoPermissionMessage()}
                 </div>
             )}
 
-            {error && <div className="page-error">{error}</div>}
-            {success && <div className="success-message">{success}</div>}
+            {/* ALERTS */}
+            {error && (
+                <div className="page-error">
+                    {error}
+                </div>
+            )}
 
+            {success && (
+                <div className="success-message">
+                    {success}
+                </div>
+            )}
+
+            {/* DELETE MODAL */}
             {departmentToDelete && (
                 <div className="modal-overlay">
                     <div className="delete-modal">
+
                         <div className="delete-modal-icon">
                             <FaTrash />
                         </div>
 
-                        <h2>Delete Department?</h2>
+                        <h2>
+                            Delete Ministry?
+                        </h2>
 
                         <p>
-                            Are you sure you want to delete{" "}
-                            <strong>{getDepartmentName(departmentToDelete)}</strong>?
+                            Are you sure you want to
+                            delete{" "}
+                            <strong>
+                                {getDepartmentName(
+                                    departmentToDelete
+                                )}
+                            </strong>
+                            ?
                         </p>
 
                         <p className="delete-warning">
@@ -324,9 +410,12 @@ const Departments = () => {
                         </p>
 
                         <div className="delete-modal-actions">
+
                             <button
                                 className="secondary-btn"
-                                onClick={closeDeleteModal}
+                                onClick={
+                                    closeDeleteModal
+                                }
                                 disabled={deleting}
                             >
                                 Cancel
@@ -337,101 +426,181 @@ const Departments = () => {
                                 onClick={confirmDelete}
                                 disabled={deleting}
                             >
-                                {deleting ? "Deleting..." : "Yes, Delete"}
+                                <FaTrash />
+
+                                {deleting
+                                    ? "Deleting..."
+                                    : "Yes, Delete"}
                             </button>
+
                         </div>
                     </div>
                 </div>
             )}
 
+            {/* STATISTICS */}
             <div className="dashboard-grid">
+
                 <div className="stat-card">
                     <div className="stat-icon">
                         <FaLayerGroup />
                     </div>
-                    <h3>Total Departments</h3>
-                    <p>{departments.length}</p>
+
+                    <h3>
+                        Total Ministries
+                    </h3>
+
+                    <p>
+                        {departments.length}
+                    </p>
                 </div>
 
                 <div className="stat-card">
                     <div className="stat-icon">
                         <FaUserCheck />
                     </div>
-                    <h3>Active Departments</h3>
-                    <p>{activeDepartments}</p>
+
+                    <h3>
+                        Active Ministries
+                    </h3>
+
+                    <p>
+                        {activeDepartments}
+                    </p>
                 </div>
 
                 <div className="stat-card">
                     <div className="stat-icon">
                         <FaUsers />
                     </div>
-                    <h3>Inactive Departments</h3>
-                    <p>{inactiveDepartments}</p>
+
+                    <h3>
+                        Inactive Ministries
+                    </h3>
+
+                    <p>
+                        {inactiveDepartments}
+                    </p>
                 </div>
+
             </div>
 
+            {/* ADD / EDIT FORM */}
             {showForm && canEditDepartments && (
                 <div className="form-card">
+
                     <div className="section-header">
                         <div>
                             <h2>
-                                {editingId ? "Edit Department" : "Add New Department"}
+                                {editingId
+                                    ? "Edit Ministry"
+                                    : "Add New Ministry"}
                             </h2>
-                            <p>Enter department details below.</p>
+
+                            <p>
+                                Enter the ministry
+                                information below.
+                            </p>
                         </div>
 
-                        <button className="icon-btn" onClick={resetForm}>
+                        <button
+                            className="icon-btn"
+                            onClick={resetForm}
+                            type="button"
+                        >
                             <FaTimes />
                         </button>
                     </div>
 
                     <form onSubmit={handleSubmit}>
+
                         <div className="form-grid">
+
+                            {/* MINISTRY NAME */}
                             <div>
-                                <label>Department Name</label>
+                                <label>
+                                    Ministry Name
+                                </label>
+
                                 <input
                                     name="department_name"
-                                    value={formData.department_name}
-                                    onChange={handleChange}
+                                    value={
+                                        formData.department_name
+                                    }
+                                    onChange={
+                                        handleChange
+                                    }
                                     placeholder="e.g. Youth Ministry"
                                 />
                             </div>
 
+                            {/* LEADER */}
                             <div>
-                                <label>Leader Name</label>
+                                <label>
+                                    Ministry Leader
+                                </label>
+
                                 <input
                                     name="leader_name"
-                                    value={formData.leader_name}
-                                    onChange={handleChange}
-                                    placeholder="e.g. Youth Leader"
+                                    value={
+                                        formData.leader_name
+                                    }
+                                    onChange={
+                                        handleChange
+                                    }
+                                    placeholder="e.g. John Banda"
                                 />
                             </div>
 
+                            {/* STATUS */}
                             <div>
-                                <label>Status</label>
+                                <label>
+                                    Status
+                                </label>
+
                                 <select
                                     name="status"
-                                    value={formData.status}
-                                    onChange={handleChange}
+                                    value={
+                                        formData.status
+                                    }
+                                    onChange={
+                                        handleChange
+                                    }
                                 >
-                                    <option value="Active">Active</option>
-                                    <option value="Inactive">Inactive</option>
+                                    <option value="Active">
+                                        Active
+                                    </option>
+
+                                    <option value="Inactive">
+                                        Inactive
+                                    </option>
                                 </select>
                             </div>
 
+                            {/* DESCRIPTION */}
                             <div className="full-width">
-                                <label>Description</label>
+                                <label>
+                                    Ministry Description
+                                </label>
+
                                 <textarea
                                     name="description"
-                                    value={formData.description}
-                                    onChange={handleChange}
+                                    value={
+                                        formData.description
+                                    }
+                                    onChange={
+                                        handleChange
+                                    }
                                     rows="3"
-                                    placeholder="Describe the department"
+                                    placeholder="Describe the ministry and its responsibilities"
                                 ></textarea>
                             </div>
+
                         </div>
 
+                        {/* FORM ACTIONS */}
                         <div className="form-actions">
+
                             <button
                                 type="button"
                                 className="secondary-btn"
@@ -446,120 +615,218 @@ const Departments = () => {
                                 disabled={saving}
                             >
                                 <FaSave />
+
                                 {saving
                                     ? "Saving..."
                                     : editingId
-                                    ? "Update Department"
-                                    : "Save Department"}
+                                    ? "Update Ministry"
+                                    : "Save Ministry"}
                             </button>
+
                         </div>
+
                     </form>
                 </div>
             )}
 
+            {/* MINISTRY TABLE */}
             <div className="table-card">
+
                 <div className="table-toolbar">
+
                     <div>
-                        <h2>Church Departments</h2>
-                        <p>{filteredDepartments.length} department(s) found</p>
+                        <h2>
+                            Church Ministries
+                        </h2>
+
+                        <p>
+                            {filteredDepartments.length}{" "}
+                            ministr
+                            {filteredDepartments.length === 1
+                                ? "y"
+                                : "ies"}{" "}
+                            found
+                        </p>
                     </div>
 
                     <div className="toolbar-actions">
+
                         <div className="search-box">
                             <FaSearch />
+
                             <input
                                 value={searchTerm}
                                 onChange={(event) =>
-                                    setSearchTerm(event.target.value)
+                                    setSearchTerm(
+                                        event.target.value
+                                    )
                                 }
-                                placeholder="Search departments..."
+                                placeholder="Search ministries..."
                             />
                         </div>
 
-                        <button className="secondary-btn" onClick={fetchDepartments}>
-                            <FaSyncAlt /> Refresh
+                        <button
+                            className="secondary-btn"
+                            onClick={fetchDepartments}
+                        >
+                            <FaSyncAlt />
+                            Refresh
                         </button>
+
                     </div>
                 </div>
 
+                {/* LOADING */}
                 {loading ? (
-                    <div className="loading-box">Loading departments...</div>
-                ) : filteredDepartments.length === 0 ? (
-                    <div className="empty-state">
-                        <FaLayerGroup />
-                        <h3>No departments found</h3>
-                        <p>Add a department to get started.</p>
+                    <div className="loading-box">
+                        Loading ministries...
                     </div>
+
+                ) : filteredDepartments.length === 0 ? (
+
+                    /* EMPTY STATE */
+                    <div className="empty-state">
+
+                        <FaLayerGroup />
+
+                        <h3>
+                            No ministries found
+                        </h3>
+
+                        <p>
+                            Add a ministry to get
+                            started.
+                        </p>
+
+                    </div>
+
                 ) : (
+
+                    /* TABLE */
                     <div className="table-wrapper">
+
                         <table className="data-table">
+
                             <thead>
                                 <tr>
-                                    <th>Department</th>
-                                    <th>Leader</th>
-                                    <th>Status</th>
-                                    <th>Description</th>
-                                    {canEditDepartments && <th>Actions</th>}
+
+                                    <th>
+                                        Ministry
+                                    </th>
+
+                                    <th>
+                                        Leader
+                                    </th>
+
+                                    <th>
+                                        Status
+                                    </th>
+
+                                    <th>
+                                        Description
+                                    </th>
+
+                                    {canEditDepartments && (
+                                        <th>
+                                            Actions
+                                        </th>
+                                    )}
+
                                 </tr>
                             </thead>
 
                             <tbody>
-                                {filteredDepartments.map((department) => (
-                                    <tr key={getDepartmentId(department)}>
-                                        <td>
-                                            <strong>
-                                                {getDepartmentName(department)}
-                                            </strong>
-                                        </td>
 
-                                        <td>
-                                            {department.leader_name ||
-                                                department.leader ||
-                                                "-"}
-                                        </td>
+                                {filteredDepartments.map(
+                                    (department) => (
 
-                                        <td>
-                                            <span
-                                                className={`status-badge ${
-                                                    department.status || "Active"
-                                                }`}
-                                            >
-                                                {department.status || "Active"}
-                                            </span>
-                                        </td>
+                                        <tr
+                                            key={getDepartmentId(
+                                                department
+                                            )}
+                                        >
 
-                                        <td>{department.description || "-"}</td>
-
-                                        {canEditDepartments && (
                                             <td>
-                                                <div className="table-actions-inline">
-                                                    <button
-                                                        className="table-action-btn"
-                                                        onClick={() =>
-                                                            handleEdit(department)
-                                                        }
-                                                    >
-                                                        <FaEdit /> Edit
-                                                    </button>
-
-                                                    <button
-                                                        className="table-delete-btn"
-                                                        onClick={() =>
-                                                            openDeleteModal(department)
-                                                        }
-                                                    >
-                                                        <FaTrash /> Delete
-                                                    </button>
-                                                </div>
+                                                <strong>
+                                                    {getDepartmentName(
+                                                        department
+                                                    )}
+                                                </strong>
                                             </td>
-                                        )}
-                                    </tr>
-                                ))}
+
+                                            <td>
+                                                {department.leader_name ||
+                                                    department.leader ||
+                                                    "-"}
+                                            </td>
+
+                                            <td>
+
+                                                <span
+                                                    className={`status-badge ${
+                                                        department.status ||
+                                                        "Active"
+                                                    }`}
+                                                >
+                                                    {department.status ||
+                                                        "Active"}
+                                                </span>
+
+                                            </td>
+
+                                            <td>
+                                                {department.description ||
+                                                    "-"}
+                                            </td>
+
+                                            {canEditDepartments && (
+                                                <td>
+
+                                                    <div className="table-actions-inline">
+
+                                                        <button
+                                                            className="table-action-btn"
+                                                            onClick={() =>
+                                                                handleEdit(
+                                                                    department
+                                                                )
+                                                            }
+                                                        >
+                                                            <FaEdit />
+                                                            Edit
+                                                        </button>
+
+                                                        <button
+                                                            className="table-delete-btn"
+                                                            onClick={() =>
+                                                                openDeleteModal(
+                                                                    department
+                                                                )
+                                                            }
+                                                        >
+                                                            <FaTrash />
+                                                            Delete
+                                                        </button>
+
+                                                    </div>
+
+                                                </td>
+                                            )}
+
+                                        </tr>
+
+                                    )
+                                )}
+
                             </tbody>
+
                         </table>
+
                     </div>
                 )}
+
             </div>
+
         </div>
     );
 };
