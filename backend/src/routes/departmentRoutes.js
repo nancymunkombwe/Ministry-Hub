@@ -69,6 +69,8 @@ router.delete(
     removeMemberFromDepartment
 );
 
+router.get("/:id/members", protect, pickHandler("getDepartmentMembers"));
+
 router.get("/:id", protect, getDepartmentById);
 
 router.put(

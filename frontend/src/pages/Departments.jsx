@@ -9,7 +9,10 @@ import {
     FaTrash,
     FaLayerGroup,
     FaUsers,
-    FaUserCheck
+    FaUserCheck,
+    FaArrowLeft,
+    FaEnvelope,
+    FaPhone
 } from "react-icons/fa";
 
 import API from "../api/api";
@@ -33,6 +36,10 @@ const Departments = () => {
     const canEditDepartments = canManageDepartments(role);
 
     const [departments, setDepartments] = useState([]);
+    const [selectedDepartment, setSelectedDepartment] = useState(null);
+    const [departmentMembers, setDepartmentMembers] = useState([]);
+    const [detailsLoading, setDetailsLoading] = useState(false);
+    const [detailsError, setDetailsError] = useState("");
 
     const [formData, setFormData] = useState(emptyForm);
     const [searchTerm, setSearchTerm] = useState("");
@@ -141,6 +148,28 @@ const Departments = () => {
         (department) =>
             getDepartmentStatus(department) === "Inactive"
     ).length;
+
+    const openDepartmentDetails = async (department) => {
+        const departmentId = getDepartmentId(department);
+        setSelectedDepartment(department);
+        setDepartmentMembers([]);
+        setDetailsLoading(true);
+        setDetailsError("");
+        try {
+            const response = await API.get(`/departments/${departmentId}/members`);
+            setDepartmentMembers(response.data.members || []);
+        } catch (error) {
+            setDetailsError(error.response?.data?.message || "Could not load members for this ministry.");
+        } finally {
+            setDetailsLoading(false);
+        }
+    };
+
+    const closeDepartmentDetails = () => {
+        setSelectedDepartment(null);
+        setDepartmentMembers([]);
+        setDetailsError("");
+    };
 
     const handleChange = (event) => {
         const { name, value } = event.target;
@@ -629,6 +658,49 @@ const Departments = () => {
                 </div>
             )}
 
+            {/* MINISTRY DETAILS */}
+            {selectedDepartment ? (
+                <div className="table-card">
+                    <div className="table-toolbar">
+                        <div>
+                            <button className="secondary-btn" onClick={closeDepartmentDetails} type="button">
+                                <FaArrowLeft /> Back to Ministries
+                            </button>
+                            <h2 style={{ marginTop: "18px" }}>{getDepartmentName(selectedDepartment)}</h2>
+                            <p>{selectedDepartment.description || "Ministry details and assigned members."}</p>
+                        </div>
+                        <div className="stat-card" style={{ minWidth: "130px", margin: 0 }}>
+                            <h3>Assigned Members</h3>
+                            <p>{detailsLoading ? "…" : departmentMembers.length}</p>
+                        </div>
+                    </div>
+                    {detailsError && <div className="page-error">{detailsError}</div>}
+                    {detailsLoading ? (
+                        <div className="loading-box">Loading ministry members...</div>
+                    ) : detailsError ? null : departmentMembers.length === 0 ? (
+                        <div className="empty-state">
+                            <FaUsers />
+                            <h3>No members assigned yet</h3>
+                            <p>Members assigned to this ministry will appear here. The count reflects actual database assignments.</p>
+                        </div>
+                    ) : (
+                        <div className="table-wrapper">
+                            <table className="data-table">
+                                <thead><tr><th>Member</th><th>Role</th><th>Membership Status</th><th>Contact</th></tr></thead>
+                                <tbody>{departmentMembers.map((member) => (
+                                    <tr key={member.id}>
+                                        <td><strong>{member.first_name} {member.last_name}</strong><div style={{ color: "#64748b", fontSize: "0.9em" }}>{member.gender || ""}</div></td>
+                                        <td>{member.role_in_department || "Member"}</td>
+                                        <td><span className={`status-badge ${member.membership_status || "Active"}`}>{member.membership_status || "Unknown"}</span></td>
+                                        <td>{member.phone && <div><FaPhone style={{ marginRight: 6 }} />{member.phone}</div>}{member.email && <div><FaEnvelope style={{ marginRight: 6 }} />{member.email}</div>}{!member.phone && !member.email && "—"}</td>
+                                    </tr>
+                                ))}</tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            ) : (
+            <>
             {/* MINISTRY TABLE */}
             <div className="table-card">
 
@@ -747,11 +819,17 @@ const Departments = () => {
                                         >
 
                                             <td>
-                                                <strong>
-                                                    {getDepartmentName(
-                                                        department
-                                                    )}
-                                                </strong>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openDepartmentDetails(department)}
+                                                    title={`View ${getDepartmentName(department)} details`}
+                                                    style={{ border: 0, background: "transparent", padding: 0, color: "#173b63", font: "inherit", fontWeight: 700, cursor: "pointer", textAlign: "left" }}
+                                                >
+                                                    {getDepartmentName(department)}
+                                                </button>
+                                                <div style={{ color: "#64748b", fontSize: "0.82em", marginTop: 4 }}>
+                                                    {Number(department.member_count || 0)} assigned member(s) · View details →
+                                                </div>
                                             </td>
 
                                             <td>
@@ -826,6 +904,8 @@ const Departments = () => {
                 )}
 
             </div>
+            </>
+            )}
 
         </div>
     );

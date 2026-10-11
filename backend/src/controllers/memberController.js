@@ -104,10 +104,25 @@ const createMember = (req, res) => {
 // GET ALL MEMBERS
 // =====================================================
 const getMembers = (req, res) => {
+    // Prefer the real department assignment when one exists, while retaining
+    // ministry_role as a fallback for older records created before assignments
+    // were linked through member_departments.
     const sql = `
-        SELECT *
-        FROM members
-        ORDER BY created_at DESC
+        SELECT
+            m.*,
+            COALESCE(
+                (
+                    SELECT d.name
+                    FROM member_departments md
+                    INNER JOIN departments d ON d.id = md.department_id
+                    WHERE md.member_id = m.id
+                    ORDER BY md.id DESC
+                    LIMIT 1
+                ),
+                m.ministry_role
+            ) AS assigned_ministry
+        FROM members m
+        ORDER BY m.created_at DESC
     `;
 
     db.query(sql, (error, results) => {

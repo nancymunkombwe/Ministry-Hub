@@ -54,7 +54,8 @@ const emptyForm = {
     membership_status: "Active",
     follow_up_status: "Okay",
 
-    ministry_role: ""
+    ministry_role: "",
+    ministry_department_id: ""
 };
 
 
@@ -151,6 +152,8 @@ const Members = () => {
 
     const [members, setMembers] = useState([]);
 
+    const [departments, setDepartments] = useState([]);
+
     const [formData, setFormData] = useState(emptyForm);
 
     const [children, setChildren] = useState([]);
@@ -174,7 +177,9 @@ const Members = () => {
     const [showBulkForm, setShowBulkForm] = useState(false);
 
     const [memberToToggle, setMemberToToggle] = useState(null);
+
     const [memberToDelete, setMemberToDelete] = useState(null);
+
     const [deletingMember, setDeletingMember] = useState(false);
 
     const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -260,8 +265,21 @@ const Members = () => {
     };
 
 
+    const fetchDepartments = async () => {
+        try {
+            const response = await API.get("/departments");
+            const list = response.data.departments || response.data.data || response.data;
+            setDepartments(Array.isArray(list) ? list : []);
+        } catch (fetchError) {
+            console.error("Failed to load ministries:", fetchError);
+            setDepartments([]);
+        }
+    };
+
+
     useEffect(() => {
         fetchMembers();
+        fetchDepartments();
     }, []);
 
 
@@ -277,7 +295,7 @@ const Members = () => {
                 ${member.gender || ""}
                 ${member.phone || ""}
                 ${member.email || ""}
-                ${member.ministry_role || ""}
+                ${member.assigned_ministry || member.ministry_role || ""}
                 ${member.membership_status || ""}
                 ${member.baptism_status || ""}
             `.toLowerCase();
@@ -666,30 +684,53 @@ const Members = () => {
                     "Okay",
 
                 ministry_role:
+                    departments.find((department) => String(department.id) === String(formData.ministry_department_id))?.name ||
                     formData.ministry_role ||
                     null
             };
 
 
+            let savedMemberId = editingId;
             if (editingId) {
                 await API.put(
                     `/members/${editingId}`,
                     payload
                 );
-
-                setSuccess(
-                    "Member updated successfully."
-                );
             } else {
-                await API.post(
+                const createResponse = await API.post(
                     "/members",
                     payload
                 );
-
-                setSuccess(
-                    "Member added successfully."
-                );
+                savedMemberId = createResponse.data.member_id || createResponse.data.id;
             }
+
+            // Keep the formal member_departments relationship in sync with the dropdown.
+            // Add the new assignment first, then remove any previous ministry assignments.
+            if (savedMemberId) {
+                const currentResponse = await API.get(`/departments/member/${savedMemberId}`);
+                const currentAssignments = currentResponse.data.departments || [];
+                const selectedDepartmentId = formData.ministry_department_id;
+                const alreadyAssigned = currentAssignments.some(
+                    (assignment) => String(assignment.department_id) === String(selectedDepartmentId)
+                );
+
+                if (selectedDepartmentId && !alreadyAssigned) {
+                    await API.post("/departments/assign", {
+                        member_id: savedMemberId,
+                        department_id: Number(selectedDepartmentId)
+                    });
+                }
+
+                for (const assignment of currentAssignments) {
+                    if (!selectedDepartmentId || String(assignment.department_id) !== String(selectedDepartmentId)) {
+                        await API.delete(`/departments/member/${savedMemberId}/${assignment.department_id}`);
+                    }
+                }
+            }
+
+            setSuccess(
+                editingId ? "Member updated successfully." : "Member added successfully."
+            );
 
 
             resetForm();
@@ -899,34 +940,37 @@ const Members = () => {
     };
 
 
-    const handleDeleteMember = (member) => {
-        if (!canEditMembers) {
-            setError(getNoPermissionMessage());
+    /* =====================================================
+       PERMANENT MEMBER DELETE
+    ===================================================== */
+
+    const handleDeleteMember = async () => {
+        if (!canEditMembers || !memberToDelete) {
+            if (!canEditMembers) setError(getNoPermissionMessage());
             return;
         }
-        if (!getMemberId(member)) return;
-        setMemberToDelete(member);
-        setError("");
-        setSuccess("");
-    };
 
-    const confirmDeleteMember = async () => {
-        if (!memberToDelete) return;
         const memberId = getMemberId(memberToDelete);
-        const memberName = getMemberName(memberToDelete);
+        if (!memberId) {
+            setError("Could not identify this member. Please refresh and try again.");
+            return;
+        }
+
         setDeletingMember(true);
         setError("");
         setSuccess("");
+
         try {
             await API.delete(`/members/${memberId}`);
-            setSuccess(`${memberName} was deleted successfully.`);
-            setMemberToDelete(null);
+            const deletedName = getMemberName(memberToDelete);
             if (selectedMember && getMemberId(selectedMember) === memberId) {
                 setSelectedMember(null);
             }
+            setMemberToDelete(null);
+            setSuccess(`${deletedName} was deleted successfully.`);
             await fetchMembers();
-        } catch (error) {
-            setError(error.response?.data?.message || "Failed to delete member.");
+        } catch (deleteError) {
+            setError(deleteError.response?.data?.message || "Failed to delete member.");
         } finally {
             setDeletingMember(false);
         }
@@ -1089,7 +1133,7 @@ const Members = () => {
        EDIT MEMBER
     ===================================================== */
 
-    const handleEdit = (member) => {
+    const handleEdit = async (member) => {
         if (!canEditMembers) {
             setError(
                 getNoPermissionMessage()
@@ -1179,8 +1223,27 @@ const Members = () => {
                 "Okay",
 
             ministry_role:
-                member.ministry_role || ""
+                member.assigned_ministry || member.ministry_role || "",
+            ministry_department_id: ""
         });
+
+        try {
+            const memberId = getMemberId(member);
+            const assignmentResponse = await API.get(`/departments/member/${memberId}`);
+            const assignments = assignmentResponse.data.departments || [];
+            const currentAssignment = assignments[0];
+            const legacyMatch = departments.find(
+                (department) => String(department.name).trim().toLowerCase() === String(member.assigned_ministry || member.ministry_role || "").trim().toLowerCase()
+            );
+            setFormData((previousData) => ({
+                ...previousData,
+                ministry_department_id: currentAssignment
+                    ? String(currentAssignment.department_id)
+                    : (legacyMatch ? String(legacyMatch.id) : "")
+            }));
+        } catch (assignmentError) {
+            console.error("Could not load member ministry assignment:", assignmentError);
+        }
 
 
         setChildren(
@@ -1793,34 +1856,30 @@ const Members = () => {
 
 
             {/* =================================================
-                STATUS MODAL
+                PERMANENT DELETE MODAL
             ================================================= */}
 
             {memberToDelete && (
                 <div className="modal-overlay">
-                    <div className="delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-member-title">
-                        <div className="delete-modal-icon">
-                            <FaTrash />
-                        </div>
-                        <h2 id="delete-member-title">Delete Member?</h2>
-                        <p>
-                            Are you sure you want to permanently delete{" "}
-                            <strong>{getMemberName(memberToDelete)}</strong>?
-                        </p>
-                        <p className="delete-warning">
-                            This action cannot be undone. Attendance and follow-up records linked to this member may also be removed.
-                        </p>
+                    <div className="delete-modal">
+                        <div className="delete-modal-icon"><FaTrash /></div>
+                        <h2>Delete Member?</h2>
+                        <p>Are you sure you want to permanently delete <strong>{getMemberName(memberToDelete)}</strong>?</p>
+                        <p className="delete-warning">This cannot be undone. Attendance and follow-up records linked to this member may also be removed.</p>
                         <div className="delete-modal-actions">
-                            <button className="secondary-btn" onClick={() => setMemberToDelete(null)} disabled={deletingMember}>
-                                Cancel
-                            </button>
-                            <button className="danger-btn" onClick={confirmDeleteMember} disabled={deletingMember}>
+                            <button className="secondary-btn" onClick={() => setMemberToDelete(null)} disabled={deletingMember}>Cancel</button>
+                            <button className="danger-btn" onClick={handleDeleteMember} disabled={deletingMember}>
                                 {deletingMember ? "Deleting..." : "Yes, Delete"}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
+
+
+            {/* =================================================
+                STATUS MODAL
+            ================================================= */}
 
             {memberToToggle && (
                 <div className="modal-overlay">
@@ -2930,20 +2989,34 @@ const Members = () => {
 
 
                                 <div>
-                                    <label>
+                                    <label htmlFor="ministry_department_id">
                                         Ministry
                                     </label>
 
-                                    <input
-                                        name="ministry_role"
-                                        value={
-                                            formData.ministry_role
-                                        }
-                                        onChange={
-                                            handleChange
-                                        }
-                                        placeholder="e.g. Youth Ministry"
-                                    />
+                                    <select
+                                        id="ministry_department_id"
+                                        name="ministry_department_id"
+                                        value={formData.ministry_department_id || ""}
+                                        onChange={(event) => {
+                                            const selectedId = event.target.value;
+                                            const selectedDepartment = departments.find(
+                                                (department) => String(department.id) === String(selectedId)
+                                            );
+                                            setFormData((previousData) => ({
+                                                ...previousData,
+                                                ministry_department_id: selectedId,
+                                                ministry_role: selectedDepartment?.name || ""
+                                            }));
+                                        }}
+                                    >
+                                        <option value="">Select a ministry (optional)</option>
+                                        {departments.map((department) => (
+                                            <option key={department.id} value={String(department.id)}>
+                                                {department.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <small>Select a registered ministry so the member count updates automatically.</small>
                                 </div>
 
                             </div>
@@ -3194,7 +3267,7 @@ const Members = () => {
 
 
                                             <td>
-                                                {member.ministry_role ||
+                                                {member.assigned_ministry || member.ministry_role ||
                                                     "-"}
                                             </td>
 
@@ -3260,9 +3333,8 @@ const Members = () => {
                                                         </button>
 
                                                         <button
-                                                            type="button"
                                                             className="table-delete-btn"
-                                                            onClick={() => handleDeleteMember(member)}
+                                                            onClick={() => setMemberToDelete(member)}
                                                             title="Permanently delete member"
                                                         >
                                                             <FaTrash />

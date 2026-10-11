@@ -121,6 +121,44 @@ const getDepartmentById = (req, res) => {
     });
 };
 
+
+// GET MEMBERS ASSIGNED TO ONE DEPARTMENT
+const getDepartmentMembers = (req, res) => {
+    const { id } = req.params;
+
+    const sql = `
+        SELECT
+            m.id,
+            m.first_name,
+            m.last_name,
+            m.gender,
+            m.phone,
+            m.email,
+            m.membership_status,
+            md.role_in_department
+        FROM member_departments md
+        INNER JOIN members m ON m.id = md.member_id
+        WHERE md.department_id = ?
+        ORDER BY m.first_name ASC, m.last_name ASC
+    `;
+
+    db.query(sql, [id], (error, results) => {
+        if (error) {
+            return res.status(500).json({
+                success: false,
+                message: "Failed to fetch ministry members",
+                error: error.message
+            });
+        }
+
+        res.json({
+            success: true,
+            count: results.length,
+            members: results
+        });
+    });
+};
+
 // UPDATE DEPARTMENT
 const updateDepartment = (req, res) => {
     const { id } = req.params;
@@ -347,6 +385,7 @@ module.exports = {
     createDepartment,
     getDepartments,
     getDepartmentById,
+    getDepartmentMembers,
     updateDepartment,
     assignMemberToDepartment,
     getMemberDepartments,
