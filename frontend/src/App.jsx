@@ -21,6 +21,7 @@ import CareFollowups from "./pages/CareFollowups";
 import Tasks from "./pages/Tasks";
 import Reports from "./pages/Reports";
 import Users from "./pages/Users";
+import Settings from "./pages/Settings";
 
 function App() {
     return (
@@ -48,6 +49,15 @@ function App() {
                         <Route path="/care" element={<CareFollowups />} />
                         <Route path="/tasks" element={<Tasks />} />
                         <Route path="/reports" element={<Reports />} />
+
+                        <Route
+                            path="/settings"
+                            element={
+                                <AdminRoute>
+                                    <Settings />
+                                </AdminRoute>
+                            }
+                        />
 
                         <Route
                             path="/users"

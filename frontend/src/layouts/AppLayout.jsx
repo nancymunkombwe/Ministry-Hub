@@ -12,7 +12,8 @@ import {
     FaUserShield,
     FaChartPie,
     FaLayerGroup,
-    FaFileAlt
+    FaFileAlt,
+    FaCog
 } from "react-icons/fa";
 
 import { useAuth } from "../context/AuthContext";
@@ -87,6 +88,11 @@ const AppLayout = () => {
             path: "/users",
             label: "Users",
             icon: <FaUserShield />
+        },
+        {
+            path: "/settings",
+            label: "Settings",
+            icon: <FaCog />
         }
     ];
 

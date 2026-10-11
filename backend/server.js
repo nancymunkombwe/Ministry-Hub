@@ -17,6 +17,7 @@ const contributionRoutes = require("./src/routes/contributionRoutes");
 const careRoutes = require("./src/routes/careRoutes");
 const taskRoutes = require("./src/routes/taskRoutes");
 const reportRoutes = require("./src/routes/reportRoutes");
+const churchProfileRoutes = require("./src/routes/churchProfileRoutes");
 
 const app = express();
 
@@ -57,6 +58,7 @@ app.use("/api/contributions", contributionRoutes);
 app.use("/api/care", careRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/church-profile", churchProfileRoutes);
 
 app.use((req, res) => {
     res.status(404).json({
