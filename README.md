@@ -15,7 +15,7 @@ A modern, full-stack church management system designed specifically for Seventh-
 ![Express](https://img.shields.io/badge/Express-REST_API-000000?style=for-the-badge&logo=express&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-Database-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
 ![JWT](https://img.shields.io/badge/JWT-Authentication-000000?style=for-the-badge&logo=jsonwebtokens)
-![Status](https://img.shields.io/badge/Status-In_Development-D4AF37?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-Completed-22C55E?style=for-the-badge)
 
 [Overview](#overview) • [Screenshots](#screenshots) • [Features](#features) • [Architecture](#system-architecture) • [Installation](#installation) • [Roadmap](#roadmap)
 
