@@ -18,19 +18,18 @@ exports.protect = (req, res, next) => {
     }
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ["HS256"] });
 
         const sql = `
             SELECT id, full_name, email, role, created_at
             FROM users
-            WHERE id = ?
+            WHERE id = ? AND status = 'Active'
         `;
 
         db.query(sql, [decoded.id], (error, results) => {
             if (error) {
                 return res.status(500).json({
-                    message: "Failed to verify user.",
-                    error: error.message
+                    message: "Failed to verify user."
                 });
             }
 

@@ -66,8 +66,7 @@ const createVisitor = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to create visitor",
-                error: error.message
+                message: "Failed to create visitor"
             });
         }
 
@@ -91,8 +90,7 @@ const getVisitors = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch visitors",
-                error: error.message
+                message: "Failed to fetch visitors"
             });
         }
 
@@ -125,8 +123,7 @@ const getVisitorById = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch visitor",
-                error: error.message
+                message: "Failed to fetch visitor"
             });
         }
 
@@ -220,8 +217,7 @@ const updateVisitor = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to update visitor",
-                error: error.message
+                message: "Failed to update visitor"
             });
         }
 
@@ -257,8 +253,7 @@ const deleteVisitor = (req, res) => {
         if (followUpError) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to delete visitor follow-ups",
-                error: followUpError.message
+                message: "Failed to delete visitor follow-ups"
             });
         }
 
@@ -266,8 +261,7 @@ const deleteVisitor = (req, res) => {
             if (visitorError) {
                 return res.status(500).json({
                     success: false,
-                    message: "Failed to delete visitor",
-                    error: visitorError.message
+                    message: "Failed to delete visitor"
                 });
             }
 
@@ -328,8 +322,7 @@ const createVisitorFollowUp = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to create visitor follow-up",
-                error: error.message
+                message: "Failed to create visitor follow-up"
             });
         }
 
@@ -356,8 +349,7 @@ const getVisitorFollowUps = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch visitor follow-ups",
-                error: error.message
+                message: "Failed to fetch visitor follow-ups"
             });
         }
 

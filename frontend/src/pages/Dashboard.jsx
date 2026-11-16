@@ -19,6 +19,7 @@ import { useAuth } from "../context/AuthContext";
 
 const Dashboard = () => {
     const { user } = useAuth();
+    const canViewFinance = ["admin", "treasurer"].includes(user?.role);
 
     const [dashboard, setDashboard] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -156,6 +157,7 @@ const Dashboard = () => {
                         </div>
 
 
+                        {canViewFinance && <>
                         {/* TOTAL CONTRIBUTIONS */}
                         <div className="stat-card">
                             <div className="stat-icon">
@@ -192,6 +194,7 @@ const Dashboard = () => {
                         </div>
 
 
+                        </>}
                         {/* CARE FOLLOW-UPS */}
                         <div className="stat-card">
                             <div className="stat-icon">

@@ -108,8 +108,7 @@ const createContribution = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to record contribution",
-                error: error.message
+                message: "Failed to record contribution"
             });
         }
 
@@ -169,8 +168,7 @@ const getContributions = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch contributions",
-                error: error.message
+                message: "Failed to fetch contributions"
             });
         }
 
@@ -230,8 +228,7 @@ const getContributionById = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch contribution",
-                error: error.message
+                message: "Failed to fetch contribution"
             });
         }
 
@@ -291,8 +288,7 @@ const getMemberContributions = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch member contributions",
-                error: error.message
+                message: "Failed to fetch member contributions"
             });
         }
 
@@ -390,8 +386,7 @@ const updateContribution = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to update contribution",
-                error: error.message
+                message: "Failed to update contribution"
             });
         }
 
@@ -431,8 +426,7 @@ const deleteContribution = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to delete contribution",
-                error: error.message
+                message: "Failed to delete contribution"
             });
         }
 
@@ -476,8 +470,8 @@ const getMonthlyContributionSummary = (req, res) => {
             ) AS total_amount
         FROM contributions
         WHERE
-            YEAR(contribution_date) = ?
-            AND MONTH(contribution_date) = ?
+            EXTRACT(YEAR FROM contribution_date) = ?
+            AND EXTRACT(MONTH FROM contribution_date) = ?
         GROUP BY contribution_category
         ORDER BY contribution_category ASC
     `;
@@ -495,8 +489,7 @@ const getMonthlyContributionSummary = (req, res) => {
                 return res.status(500).json({
                     success: false,
                     message:
-                        "Failed to fetch monthly contribution summary",
-                    error: error.message
+                        "Failed to fetch monthly contribution summary"
                 });
             }
 

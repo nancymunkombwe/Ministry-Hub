@@ -93,7 +93,7 @@ const getDashboardSummary = async (req, res) => {
                 SELECT COUNT(*)
                 FROM members
                 WHERE date_joined_church IS NOT NULL
-                AND date_joined_church < DATE_ADD(?, INTERVAL 1 DAY)
+                AND date_joined_church < (?::date + 1)
             ) AS total_members,
 
             (
@@ -101,7 +101,7 @@ const getDashboardSummary = async (req, res) => {
                 FROM members
                 WHERE membership_status = 'Active'
                 AND date_joined_church IS NOT NULL
-                AND date_joined_church < DATE_ADD(?, INTERVAL 1 DAY)
+                AND date_joined_church < (?::date + 1)
             ) AS active_members,
 
 
@@ -113,7 +113,7 @@ const getDashboardSummary = async (req, res) => {
                 SELECT COUNT(*)
                 FROM visitors
                 WHERE visit_date >= ?
-                AND visit_date < DATE_ADD(?, INTERVAL 1 DAY)
+                AND visit_date < (?::date + 1)
             ) AS total_visitors,
 
 
@@ -125,14 +125,14 @@ const getDashboardSummary = async (req, res) => {
                 SELECT COALESCE(SUM(amount), 0)
                 FROM contributions
                 WHERE contribution_date >= ?
-                AND contribution_date < DATE_ADD(?, INTERVAL 1 DAY)
+                AND contribution_date < (?::date + 1)
             ) AS total_contributions,
 
             (
                 SELECT COALESCE(SUM(amount), 0)
                 FROM contributions
                 WHERE contribution_date >= ?
-                AND contribution_date < DATE_ADD(?, INTERVAL 1 DAY)
+                AND contribution_date < (?::date + 1)
             ) AS monthly_contributions,
 
 
@@ -145,7 +145,7 @@ const getDashboardSummary = async (req, res) => {
                 FROM care_followups
                 WHERE status IN ('Pending', 'In Progress')
                 AND due_date >= ?
-                AND due_date < DATE_ADD(?, INTERVAL 1 DAY)
+                AND due_date < (?::date + 1)
             ) AS pending_care_followups,
 
 
@@ -158,7 +158,7 @@ const getDashboardSummary = async (req, res) => {
                 FROM tasks
                 WHERE status IN ('Pending', 'In Progress')
                 AND due_date >= ?
-                AND due_date < DATE_ADD(?, INTERVAL 1 DAY)
+                AND due_date < (?::date + 1)
             ) AS pending_tasks,
 
 
@@ -177,7 +177,7 @@ const getDashboardSummary = async (req, res) => {
                         ON ar.session_id = s.id
                     WHERE ar.status = 'Absent'
                     AND s.session_date >= ?
-                    AND s.session_date < DATE_ADD(?, INTERVAL 1 DAY)
+                    AND s.session_date < (?::date + 1)
                     GROUP BY ar.member_id
                     HAVING COUNT(ar.id) >= 3
                 )
@@ -195,9 +195,7 @@ const getDashboardSummary = async (req, res) => {
             from, to
         ]);
 
-        res.json({
-            success: true,
-            dashboard: results[0] || {
+        const dashboard = results[0] || {
                 total_members: 0,
                 active_members: 0,
                 total_visitors: 0,
@@ -206,7 +204,12 @@ const getDashboardSummary = async (req, res) => {
                 pending_care_followups: 0,
                 pending_tasks: 0,
                 missing_members: 0
-            },
+            };
+        if (!["admin", "treasurer"].includes(req.user.role)) {
+            delete dashboard.total_contributions;
+            delete dashboard.monthly_contributions;
+        }
+        res.json({ success: true, dashboard,
             period: {
                 from,
                 to
@@ -220,8 +223,7 @@ const getDashboardSummary = async (req, res) => {
 
         res.status(500).json({
             success: false,
-            message: "Failed to fetch dashboard summary",
-            error: error.message
+            message: "Failed to fetch dashboard summary"
         });
     }
 };
@@ -246,7 +248,7 @@ const getChurchHealthSummary = async (req, res) => {
                 COUNT(*) AS total
             FROM members
             WHERE date_joined_church IS NOT NULL
-            AND date_joined_church < DATE_ADD(?, INTERVAL 1 DAY)
+            AND date_joined_church < (?::date + 1)
             GROUP BY membership_status
             ORDER BY membership_status
         `,
@@ -257,7 +259,7 @@ const getChurchHealthSummary = async (req, res) => {
                 COUNT(*) AS total
             FROM care_followups
             WHERE due_date >= ?
-            AND due_date < DATE_ADD(?, INTERVAL 1 DAY)
+            AND due_date < (?::date + 1)
             GROUP BY status
             ORDER BY status
         `,
@@ -268,7 +270,7 @@ const getChurchHealthSummary = async (req, res) => {
                 COUNT(*) AS total
             FROM tasks
             WHERE due_date >= ?
-            AND due_date < DATE_ADD(?, INTERVAL 1 DAY)
+            AND due_date < (?::date + 1)
             GROUP BY status
             ORDER BY status
         `,
@@ -279,7 +281,7 @@ const getChurchHealthSummary = async (req, res) => {
                 COUNT(*) AS total
             FROM visitors
             WHERE visit_date >= ?
-            AND visit_date < DATE_ADD(?, INTERVAL 1 DAY)
+            AND visit_date < (?::date + 1)
             GROUP BY follow_up_status
             ORDER BY follow_up_status
         `
@@ -316,8 +318,7 @@ const getChurchHealthSummary = async (req, res) => {
 
         res.status(500).json({
             success: false,
-            message: "Failed to fetch church health summary",
-            error: error.message
+            message: "Failed to fetch church health summary"
         });
     }
 };
@@ -389,11 +390,7 @@ const getMemberSummary = async (req, res) => {
                 SUM(
                     CASE
                         WHEN date_of_birth IS NOT NULL
-                        AND TIMESTAMPDIFF(
-                            YEAR,
-                            date_of_birth,
-                            ?
-                        ) < 18
+                        AND EXTRACT(YEAR FROM age(?::date, date_of_birth)) < 18
                         THEN 1
                         ELSE 0
                     END
@@ -402,11 +399,7 @@ const getMemberSummary = async (req, res) => {
                 SUM(
                     CASE
                         WHEN date_of_birth IS NOT NULL
-                        AND TIMESTAMPDIFF(
-                            YEAR,
-                            date_of_birth,
-                            ?
-                        ) >= 18
+                        AND EXTRACT(YEAR FROM age(?::date, date_of_birth)) >= 18
                         THEN 1
                         ELSE 0
                     END
@@ -416,14 +409,14 @@ const getMemberSummary = async (req, res) => {
 
             WHERE
                 date_joined_church IS NOT NULL
-                AND date_joined_church < DATE_ADD(?, INTERVAL 1 DAY)
+                AND date_joined_church < (?::date + 1)
         `;
 
         const newMembersSql = `
             SELECT COUNT(*) AS total
             FROM members
             WHERE date_joined_church >= ?
-            AND date_joined_church < DATE_ADD(?, INTERVAL 1 DAY)
+            AND date_joined_church < (?::date + 1)
         `;
 
         const unknownJoinDateSql = `
@@ -436,7 +429,7 @@ const getMemberSummary = async (req, res) => {
             SELECT COUNT(*) AS total
             FROM members
             WHERE baptism_date >= ?
-            AND baptism_date < DATE_ADD(?, INTERVAL 1 DAY)
+            AND baptism_date < (?::date + 1)
         `;
 
         const statusSql = `
@@ -449,7 +442,7 @@ const getMemberSummary = async (req, res) => {
             FROM members
             WHERE
                 date_joined_church IS NOT NULL
-                AND date_joined_church < DATE_ADD(?, INTERVAL 1 DAY)
+                AND date_joined_church < (?::date + 1)
             GROUP BY membership_status
             ORDER BY membership_status
         `;
@@ -464,7 +457,7 @@ const getMemberSummary = async (req, res) => {
             FROM members
             WHERE
                 date_joined_church IS NOT NULL
-                AND date_joined_church < DATE_ADD(?, INTERVAL 1 DAY)
+                AND date_joined_church < (?::date + 1)
             GROUP BY baptism_status
             ORDER BY baptism_status
         `;
@@ -479,7 +472,7 @@ const getMemberSummary = async (req, res) => {
             FROM members
             WHERE
                 date_joined_church IS NOT NULL
-                AND date_joined_church < DATE_ADD(?, INTERVAL 1 DAY)
+                AND date_joined_church < (?::date + 1)
             GROUP BY gender
             ORDER BY gender
         `;
@@ -496,7 +489,7 @@ const getMemberSummary = async (req, res) => {
                 ON m.department_id = d.id
             WHERE
                 m.date_joined_church IS NOT NULL
-                AND m.date_joined_church < DATE_ADD(?, INTERVAL 1 DAY)
+                AND m.date_joined_church < (?::date + 1)
             GROUP BY d.id, d.name
             ORDER BY department_name
         `;
@@ -567,7 +560,7 @@ const getMemberSummary = async (req, res) => {
                 FROM members
                 WHERE
                     date_joined_church IS NOT NULL
-                    AND date_joined_church < DATE_ADD(?, INTERVAL 1 DAY)
+                    AND date_joined_church < (?::date + 1)
                 ORDER BY
                     last_name ASC,
                     first_name ASC
@@ -647,8 +640,7 @@ const getMemberSummary = async (req, res) => {
 
         res.status(500).json({
             success: false,
-            message: "Failed to fetch membership report",
-            error: error.message
+            message: "Failed to fetch membership report"
         });
     }
 };
@@ -710,7 +702,7 @@ const getAttendanceSummary = async (req, res) => {
 
             WHERE
                 s.session_date >= ?
-                AND s.session_date < DATE_ADD(?, INTERVAL 1 DAY)
+                AND s.session_date < (?::date + 1)
 
             GROUP BY
                 s.id,
@@ -734,7 +726,7 @@ const getAttendanceSummary = async (req, res) => {
 
             WHERE
                 s.session_date >= ?
-                AND s.session_date < DATE_ADD(?, INTERVAL 1 DAY)
+                AND s.session_date < (?::date + 1)
 
             GROUP BY ar.status
             ORDER BY ar.status
@@ -769,7 +761,7 @@ const getAttendanceSummary = async (req, res) => {
 
             WHERE
                 s.session_date >= ?
-                AND s.session_date < DATE_ADD(?, INTERVAL 1 DAY)
+                AND s.session_date < (?::date + 1)
 
             GROUP BY s.service_type
             ORDER BY s.service_type
@@ -893,7 +885,7 @@ const getAttendanceSummary = async (req, res) => {
 
                 WHERE
                     s.session_date >= ?
-                    AND s.session_date < DATE_ADD(?, INTERVAL 1 DAY)
+                    AND s.session_date < (?::date + 1)
 
                 ORDER BY
                     s.session_date ASC,
@@ -950,8 +942,7 @@ const getAttendanceSummary = async (req, res) => {
 
         res.status(500).json({
             success: false,
-            message: "Failed to fetch attendance report",
-            error: error.message
+            message: "Failed to fetch attendance report"
         });
     }
 };
@@ -994,7 +985,7 @@ const getContributionSummary = async (req, res) => {
 
             WHERE
                 contribution_date >= ?
-                AND contribution_date < DATE_ADD(?, INTERVAL 1 DAY)
+                AND contribution_date < (?::date + 1)
 
             GROUP BY contribution_category
 
@@ -1024,16 +1015,13 @@ const getContributionSummary = async (req, res) => {
 
             WHERE
                 contribution_date >= ?
-                AND contribution_date < DATE_ADD(?, INTERVAL 1 DAY)
+                AND contribution_date < (?::date + 1)
         `;
 
         const monthlySql = `
             SELECT
 
-                DATE_FORMAT(
-                    contribution_date,
-                    '%Y-%m'
-                ) AS month,
+                to_char(contribution_date, 'YYYY-MM') AS month,
 
                 COALESCE(
                     SUM(amount),
@@ -1046,13 +1034,10 @@ const getContributionSummary = async (req, res) => {
 
             WHERE
                 contribution_date >= ?
-                AND contribution_date < DATE_ADD(?, INTERVAL 1 DAY)
+                AND contribution_date < (?::date + 1)
 
             GROUP BY
-                DATE_FORMAT(
-                    contribution_date,
-                    '%Y-%m'
-                )
+                to_char(contribution_date, 'YYYY-MM')
 
             ORDER BY month ASC
         `;
@@ -1113,7 +1098,7 @@ const getContributionSummary = async (req, res) => {
 
                 WHERE
                     c.contribution_date >= ?
-                    AND c.contribution_date < DATE_ADD(?, INTERVAL 1 DAY)
+                    AND c.contribution_date < (?::date + 1)
 
                 ORDER BY
                     c.contribution_date DESC,
@@ -1182,8 +1167,7 @@ const getContributionSummary = async (req, res) => {
 
         res.status(500).json({
             success: false,
-            message: "Failed to fetch contribution report",
-            error: error.message
+            message: "Failed to fetch contribution report"
         });
     }
 };
@@ -1255,7 +1239,7 @@ const getVisitorSummary = async (req, res) => {
 
             WHERE
                 visit_date >= ?
-                AND visit_date < DATE_ADD(?, INTERVAL 1 DAY)
+                AND visit_date < (?::date + 1)
         `;
 
         const followUpSql = `
@@ -1272,7 +1256,7 @@ const getVisitorSummary = async (req, res) => {
 
             WHERE
                 visit_date >= ?
-                AND visit_date < DATE_ADD(?, INTERVAL 1 DAY)
+                AND visit_date < (?::date + 1)
 
             GROUP BY follow_up_status
 
@@ -1282,10 +1266,7 @@ const getVisitorSummary = async (req, res) => {
         const monthlySql = `
             SELECT
 
-                DATE_FORMAT(
-                    visit_date,
-                    '%Y-%m'
-                ) AS month,
+                to_char(visit_date, 'YYYY-MM') AS month,
 
                 COUNT(*) AS total_visitors
 
@@ -1293,13 +1274,10 @@ const getVisitorSummary = async (req, res) => {
 
             WHERE
                 visit_date >= ?
-                AND visit_date < DATE_ADD(?, INTERVAL 1 DAY)
+                AND visit_date < (?::date + 1)
 
             GROUP BY
-                DATE_FORMAT(
-                    visit_date,
-                    '%Y-%m'
-                )
+                to_char(visit_date, 'YYYY-MM')
 
             ORDER BY month ASC
         `;
@@ -1346,7 +1324,7 @@ const getVisitorSummary = async (req, res) => {
 
                 WHERE
                     visit_date >= ?
-                    AND visit_date < DATE_ADD(?, INTERVAL 1 DAY)
+                    AND visit_date < (?::date + 1)
 
                 ORDER BY
                     visit_date DESC,
@@ -1445,8 +1423,7 @@ const getVisitorSummary = async (req, res) => {
 
         res.status(500).json({
             success: false,
-            message: "Failed to fetch visitor report",
-            error: error.message
+            message: "Failed to fetch visitor report"
         });
     }
 };
@@ -1461,7 +1438,7 @@ const getUpcomingEvents = async (req, res) => {
         SELECT
             e.*
         FROM events e
-        WHERE e.event_date >= CURDATE()
+        WHERE e.event_date >= CURRENT_DATE
         ORDER BY e.event_date ASC
     `;
 
@@ -1480,8 +1457,7 @@ const getUpcomingEvents = async (req, res) => {
 
         res.status(500).json({
             success: false,
-            message: "Failed to fetch upcoming events",
-            error: error.message
+            message: "Failed to fetch upcoming events"
         });
     }
 };
@@ -1518,8 +1494,7 @@ const getRecentAnnouncements = async (req, res) => {
 
         res.status(500).json({
             success: false,
-            message: "Failed to fetch recent announcements",
-            error: error.message
+            message: "Failed to fetch recent announcements"
         });
     }
 };

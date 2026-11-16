@@ -44,9 +44,9 @@ exports.register = async (req, res) => {
         });
     }
 
-    if (password.length < 6) {
+    if (password.length < 12) {
         return res.status(400).json({
-            message: "Password must be at least 6 characters."
+            message: "Password must be at least 12 characters."
         });
     }
 
@@ -59,8 +59,7 @@ exports.register = async (req, res) => {
     db.query(checkUserSql, [email], async (checkError, existingUsers) => {
         if (checkError) {
             return res.status(500).json({
-                message: "Failed to check existing user.",
-                error: checkError.message
+                message: "Failed to check existing user."
             });
         }
 
@@ -84,8 +83,7 @@ exports.register = async (req, res) => {
                 (insertError, result) => {
                     if (insertError) {
                         return res.status(500).json({
-                            message: "Failed to register user.",
-                            error: insertError.message
+                            message: "Failed to register user."
                         });
                     }
 
@@ -102,8 +100,7 @@ exports.register = async (req, res) => {
             );
         } catch (hashError) {
             return res.status(500).json({
-                message: "Failed to secure password.",
-                error: hashError.message
+                message: "Failed to secure password."
             });
         }
     });
@@ -121,14 +118,13 @@ exports.login = (req, res) => {
     const sql = `
         SELECT id, full_name, email, password, role, created_at
         FROM users
-        WHERE email = ?
+        WHERE email = ? AND status = 'Active'
     `;
 
     db.query(sql, [email], async (error, results) => {
         if (error) {
             return res.status(500).json({
-                message: "Failed to login.",
-                error: error.message
+                message: "Failed to login."
             });
         }
 
@@ -164,14 +160,13 @@ exports.getProfile = (req, res) => {
     const sql = `
         SELECT id, full_name, email, role, created_at
         FROM users
-        WHERE id = ?
+        WHERE id = ? AND status = 'Active'
     `;
 
     db.query(sql, [userId], (error, results) => {
         if (error) {
             return res.status(500).json({
-                message: "Failed to load profile.",
-                error: error.message
+                message: "Failed to load profile."
             });
         }
 

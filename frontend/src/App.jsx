@@ -45,7 +45,7 @@ function App() {
                         <Route path="/attendance" element={<Attendance />} />
                         <Route path="/events" element={<Events />} />
                         <Route path="/announcements" element={<Announcements />} />
-                        <Route path="/contributions" element={<Contributions />} />
+                        <Route path="/contributions" element={<AdminRoute roles={["admin", "treasurer"]}><Contributions /></AdminRoute>} />
                         <Route path="/care" element={<CareFollowups />} />
                         <Route path="/tasks" element={<Tasks />} />
                         <Route path="/reports" element={<Reports />} />

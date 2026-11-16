@@ -1,6 +1,8 @@
 const express = require("express");
 
 const router = express.Router();
+const { protect, authorize } = require("../middleware/authMiddleware");
+router.use(protect);
 
 const {
     getDashboardSummary,
@@ -155,6 +157,7 @@ router.get(
 */
 router.get(
     "/contributions",
+    authorize("admin", "treasurer"),
     getContributionSummary
 );
 

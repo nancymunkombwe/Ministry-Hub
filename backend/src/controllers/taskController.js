@@ -58,8 +58,7 @@ const createTask = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to create task",
-                error: error.message
+                message: "Failed to create task"
             });
         }
 
@@ -104,8 +103,7 @@ const getTasks = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch tasks",
-                error: error.message
+                message: "Failed to fetch tasks"
             });
         }
 
@@ -148,8 +146,7 @@ const getTaskById = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch task",
-                error: error.message
+                message: "Failed to fetch task"
             });
         }
 
@@ -199,8 +196,7 @@ const getTasksAssignedToUser = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch assigned tasks",
-                error: error.message
+                message: "Failed to fetch assigned tasks"
             });
         }
 
@@ -270,8 +266,7 @@ const updateTask = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to update task",
-                error: error.message
+                message: "Failed to update task"
             });
         }
 
@@ -317,8 +312,7 @@ const updateTaskStatus = (req, res) => {
             if (error) {
                 return res.status(500).json({
                     success: false,
-                    message: "Failed to update task status",
-                    error: error.message
+                    message: "Failed to update task status"
                 });
             }
 
@@ -345,8 +339,7 @@ const deleteTask = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to delete task",
-                error: error.message
+                message: "Failed to delete task"
             });
         }
 

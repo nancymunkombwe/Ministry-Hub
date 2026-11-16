@@ -84,8 +84,7 @@ const createCareFollowUp = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to create care follow-up",
-                error: error.message
+                message: "Failed to create care follow-up"
             });
         }
 
@@ -154,8 +153,7 @@ const getCareFollowUps = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch care follow-ups",
-                error: error.message
+                message: "Failed to fetch care follow-ups"
             });
         }
 
@@ -218,8 +216,7 @@ const getCareFollowUpById = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch care follow-up",
-                error: error.message
+                message: "Failed to fetch care follow-up"
             });
         }
 
@@ -289,8 +286,7 @@ const getMemberCareFollowUps = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch member care follow-ups",
-                error: error.message
+                message: "Failed to fetch member care follow-ups"
             });
         }
 
@@ -387,8 +383,7 @@ const updateCareFollowUp = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to update care follow-up",
-                error: error.message
+                message: "Failed to update care follow-up"
             });
         }
 
@@ -426,8 +421,7 @@ const deleteCareFollowUp = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to delete care follow-up",
-                error: error.message
+                message: "Failed to delete care follow-up"
             });
         }
 

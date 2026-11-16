@@ -101,8 +101,7 @@ const createEvent = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to create event",
-                error: error.message
+                message: "Failed to create event"
             });
 
         }
@@ -167,8 +166,7 @@ const getEvents = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch events",
-                error: error.message
+                message: "Failed to fetch events"
             });
 
         }
@@ -234,8 +232,7 @@ const getEventById = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch event",
-                error: error.message
+                message: "Failed to fetch event"
             });
 
         }
@@ -349,8 +346,7 @@ const updateEvent = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to update event",
-                error: error.message
+                message: "Failed to update event"
             });
 
         }
@@ -399,8 +395,7 @@ const deleteEvent = (req, res) => {
 
                 return res.status(500).json({
                     success: false,
-                    message: "Failed to delete event",
-                    error: error.message
+                    message: "Failed to delete event"
                 });
 
             }
@@ -488,8 +483,7 @@ const createProgramItem = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to create program item",
-                error: error.message
+                message: "Failed to create program item"
             });
 
         }
@@ -534,8 +528,7 @@ const getProgramItems = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch program items",
-                error: error.message
+                message: "Failed to fetch program items"
             });
 
         }

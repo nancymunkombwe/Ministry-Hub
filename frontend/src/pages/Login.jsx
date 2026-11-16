@@ -10,8 +10,8 @@ const Login = () => {
     const navigate = useNavigate();
     const { login } = useAuth();
 
-    const [email, setEmail] = useState("admin@ministryhub.com");
-    const [password, setPassword] = useState("admin123");
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
 
@@ -106,7 +106,7 @@ const Login = () => {
                                 Remember me
                             </label>
 
-                            <Link to="/login">Forgot password?</Link>
+                            <span>Contact your administrator for a password reset.</span>
                         </div>
 
                         <button type="submit" disabled={loading}>

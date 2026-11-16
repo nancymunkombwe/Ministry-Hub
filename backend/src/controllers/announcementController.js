@@ -113,8 +113,7 @@ const createAnnouncement = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to create announcement",
-                error: error.message
+                message: "Failed to create announcement"
             });
         }
 
@@ -183,8 +182,7 @@ const getAnnouncements = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch announcements",
-                error: error.message
+                message: "Failed to fetch announcements"
             });
         }
 
@@ -237,8 +235,7 @@ const getAnnouncementById = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch announcement",
-                error: error.message
+                message: "Failed to fetch announcement"
             });
         }
 
@@ -346,8 +343,7 @@ const updateAnnouncement = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to update announcement",
-                error: error.message
+                message: "Failed to update announcement"
             });
         }
 
@@ -382,8 +378,7 @@ const deleteAnnouncement = (req, res) => {
 
                 return res.status(500).json({
                     success: false,
-                    message: "Failed to delete announcement",
-                    error: error.message
+                    message: "Failed to delete announcement"
                 });
             }
 
@@ -434,8 +429,7 @@ const getWhatsAppMessage = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to generate WhatsApp message",
-                error: error.message
+                message: "Failed to generate WhatsApp message"
             });
         }
 

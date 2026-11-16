@@ -32,8 +32,8 @@ exports.updateChurchProfile = (req, res) => {
         ) VALUES (
             1, ${fields.map(() => "?").join(", ")}
         )
-        ON DUPLICATE KEY UPDATE
-            ${fields.map((field) => `${field} = VALUES(${field})`).join(", ")},
+        ON CONFLICT (id) DO UPDATE SET
+            ${fields.map((field) => `${field} = EXCLUDED.${field}`).join(", ")},
             updated_at = CURRENT_TIMESTAMP
     `;
 

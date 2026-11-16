@@ -359,7 +359,7 @@ const Reports = () => {
                 API.get("/members"),
                 API.get("/visitors"),
                 API.get("/attendance/sessions"),
-                API.get("/contributions"),
+                canViewFinance ? API.get("/contributions") : Promise.resolve({ data: [] }),
                 API.get("/events"),
                 API.get("/announcements"),
                 API.get("/care"),
@@ -1102,12 +1102,7 @@ const Reports = () => {
                         selectedVisitors.length
                     ],
 
-                    [
-                        "Contributions in Period",
-                        formatMoney(
-                            totalContributionAmount
-                        )
-                    ],
+                    ...(canViewFinance ? [["Contributions in Period", formatMoney(totalContributionAmount)]] : []),
 
                     [
                         "Pending Care Follow-ups",

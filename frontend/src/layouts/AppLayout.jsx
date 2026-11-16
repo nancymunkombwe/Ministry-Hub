@@ -23,7 +23,7 @@ import SdaFooter from "../components/SdaFooter";
 const AppLayout = () => {
     const { user, logout } = useAuth();
 
-    const role = user?.role || "admin";
+    const role = user?.role || "";
 
     const navItems = [
         {
@@ -99,7 +99,7 @@ const AppLayout = () => {
     const visibleNavItems =
         role === "admin"
             ? [...navItems, ...adminItems]
-            : navItems;
+            : navItems.filter((item) => role === "treasurer" || item.path !== "/contributions");
 
     return (
         <div className="app-layout">

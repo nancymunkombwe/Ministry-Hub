@@ -28,8 +28,7 @@ const createDepartment = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to create department",
-                error: error.message
+                message: "Failed to create department"
             });
         }
 
@@ -64,8 +63,7 @@ const getDepartments = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch departments",
-                error: error.message
+                message: "Failed to fetch departments"
             });
         }
 
@@ -102,8 +100,7 @@ const getDepartmentById = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch department",
-                error: error.message
+                message: "Failed to fetch department"
             });
         }
 
@@ -146,8 +143,7 @@ const getDepartmentMembers = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch ministry members",
-                error: error.message
+                message: "Failed to fetch ministry members"
             });
         }
 
@@ -189,8 +185,7 @@ const updateDepartment = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to update department",
-                error: error.message
+                message: "Failed to update department"
             });
         }
 
@@ -229,8 +224,7 @@ const assignMemberToDepartment = (req, res) => {
         if (checkError) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to check department assignment",
-                error: checkError.message
+                message: "Failed to check department assignment"
             });
         }
 
@@ -253,8 +247,7 @@ const assignMemberToDepartment = (req, res) => {
             if (insertError) {
                 return res.status(500).json({
                     success: false,
-                    message: "Failed to assign member to department",
-                    error: insertError.message
+                    message: "Failed to assign member to department"
                 });
             }
 
@@ -289,8 +282,7 @@ const getMemberDepartments = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch member departments",
-                error: error.message
+                message: "Failed to fetch member departments"
             });
         }
 
@@ -315,8 +307,7 @@ const removeMemberFromDepartment = (req, res) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to remove member from department",
-                error: error.message
+                message: "Failed to remove member from department"
             });
         }
 
@@ -352,8 +343,7 @@ const deleteDepartment = (req, res) => {
         if (assignmentError) {
             return res.status(500).json({
                 success: false,
-                message: "Failed to remove department assignments",
-                error: assignmentError.message
+                message: "Failed to remove department assignments"
             });
         }
 
@@ -361,8 +351,7 @@ const deleteDepartment = (req, res) => {
             if (departmentError) {
                 return res.status(500).json({
                     success: false,
-                    message: "Failed to delete department",
-                    error: departmentError.message
+                    message: "Failed to delete department"
                 });
             }
 

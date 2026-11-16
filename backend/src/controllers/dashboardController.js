@@ -28,11 +28,8 @@ const getDashboardSnapshot = async (req, res) => {
                 (
                     SELECT COALESCE(SUM(amount), 0)
                     FROM contributions
-                    WHERE contribution_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
-                      AND contribution_date < DATE_ADD(
-                          LAST_DAY(CURDATE()),
-                          INTERVAL 1 DAY
-                      )
+                    WHERE contribution_date >= date_trunc('month', CURRENT_DATE)::date
+                      AND contribution_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')::date
                 ) AS monthly_contributions,
 
                 (
@@ -55,8 +52,8 @@ const getDashboardSnapshot = async (req, res) => {
                         INNER JOIN attendance_sessions s
                             ON ar.session_id = s.id
                         WHERE ar.status = 'Absent'
-                          AND s.session_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-                          AND s.session_date < DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+                          AND s.session_date >= (CURRENT_DATE - 30)
+                          AND s.session_date < (CURRENT_DATE + 1)
                         GROUP BY ar.member_id
                         HAVING COUNT(ar.id) >= 3
                     ) AS missing_member_list
@@ -73,8 +70,10 @@ const getDashboardSnapshot = async (req, res) => {
                 total_members: Number(dashboard.total_members) || 0,
                 active_members: Number(dashboard.active_members) || 0,
                 total_visitors: Number(dashboard.total_visitors) || 0,
-                total_contributions: Number(dashboard.total_contributions) || 0,
-                monthly_contributions: Number(dashboard.monthly_contributions) || 0,
+                ...(["admin", "treasurer"].includes(req.user.role) ? {
+                    total_contributions: Number(dashboard.total_contributions) || 0,
+                    monthly_contributions: Number(dashboard.monthly_contributions) || 0
+                } : {}),
                 pending_care_followups:
                     Number(dashboard.pending_care_followups) || 0,
                 pending_tasks: Number(dashboard.pending_tasks) || 0,
@@ -86,8 +85,7 @@ const getDashboardSnapshot = async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            message: "Failed to load dashboard summary",
-            error: error.message
+            message: "Failed to load dashboard summary"
         });
     }
 };

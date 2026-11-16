@@ -13,21 +13,23 @@ const { protect, authorize } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-router.get("/", protect, getContributions);
+router.get("/", protect, authorize("admin", "treasurer"), getContributions);
 
 router.get(
     "/summary/monthly",
     protect,
+    authorize("admin", "treasurer"),
     getMonthlyContributionSummary
 );
 
 router.get(
     "/member/:memberId",
     protect,
+    authorize("admin", "treasurer"),
     getMemberContributions
 );
 
-router.get("/:id", protect, getContributionById);
+router.get("/:id", protect, authorize("admin", "treasurer"), getContributionById);
 
 router.post(
     "/",

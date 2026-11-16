@@ -498,7 +498,7 @@ const getMissingMembers = (req, res) => {
         JOIN attendance_sessions s
             ON ar.session_id = s.id
         WHERE ar.status = 'Absent'
-          AND s.session_date >= DATE_SUB(CURDATE(), INTERVAL 60 DAY)
+          AND s.session_date >= (CURRENT_DATE - 60)
         GROUP BY
             m.id,
             m.first_name,
@@ -507,7 +507,7 @@ const getMissingMembers = (req, res) => {
             m.email,
             m.membership_status,
             m.follow_up_status
-        HAVING missed_services >= 3
+        HAVING COUNT(ar.id) >= 3
         ORDER BY missed_services DESC
     `;
 

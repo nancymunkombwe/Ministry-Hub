@@ -86,8 +86,7 @@ const createMember = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to create member",
-                error: error.message
+                message: "Failed to create member"
             });
         }
 
@@ -131,8 +130,7 @@ const getMembers = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch members",
-                error: error.message
+                message: "Failed to fetch members"
             });
         }
 
@@ -163,8 +161,7 @@ const getMemberById = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to fetch member",
-                error: error.message
+                message: "Failed to fetch member"
             });
         }
 
@@ -272,8 +269,7 @@ const updateMember = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to update member",
-                error: error.message
+                message: "Failed to update member"
             });
         }
 
@@ -309,8 +305,7 @@ const deleteMember = (req, res) => {
 
             return res.status(500).json({
                 success: false,
-                message: "Failed to delete member",
-                error: error.message
+                message: "Failed to delete member"
             });
         }
 

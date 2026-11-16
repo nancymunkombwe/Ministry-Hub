@@ -25,8 +25,7 @@ exports.getUsers = (req, res) => {
     db.query(sql, (error, results) => {
         if (error) {
             return res.status(500).json({
-                message: "Failed to load users.",
-                error: error.message
+                message: "Failed to load users."
             });
         }
 
@@ -49,8 +48,7 @@ exports.getUserById = (req, res) => {
     db.query(sql, [id], (error, results) => {
         if (error) {
             return res.status(500).json({
-                message: "Failed to load user.",
-                error: error.message
+                message: "Failed to load user."
             });
         }
 
@@ -90,9 +88,9 @@ exports.createUser = async (req, res) => {
         });
     }
 
-    if (password.length < 6) {
+    if (password.length < 12) {
         return res.status(400).json({
-            message: "Password must be at least 6 characters."
+            message: "Password must be at least 12 characters."
         });
     }
 
@@ -105,8 +103,7 @@ exports.createUser = async (req, res) => {
     db.query(checkEmailSql, [email], async (checkError, existingUsers) => {
         if (checkError) {
             return res.status(500).json({
-                message: "Failed to check user email.",
-                error: checkError.message
+                message: "Failed to check user email."
             });
         }
 
@@ -130,8 +127,7 @@ exports.createUser = async (req, res) => {
                 (insertError, result) => {
                     if (insertError) {
                         return res.status(500).json({
-                            message: "Failed to create user.",
-                            error: insertError.message
+                            message: "Failed to create user."
                         });
                     }
 
@@ -149,8 +145,7 @@ exports.createUser = async (req, res) => {
             );
         } catch (hashError) {
             return res.status(500).json({
-                message: "Failed to secure password.",
-                error: hashError.message
+                message: "Failed to secure password."
             });
         }
     });
@@ -159,6 +154,7 @@ exports.createUser = async (req, res) => {
 exports.updateUser = async (req, res) => {
     const { id } = req.params;
     const { full_name, email, password, role, status } = req.body;
+    if (Number(id) === Number(req.user.id) && (role !== "admin" || status === "Inactive")) return res.status(400).json({ message: "You cannot demote or deactivate your own administrator account." });
 
     if (!full_name || !email || !role) {
         return res.status(400).json({
@@ -189,8 +185,7 @@ exports.updateUser = async (req, res) => {
     db.query(checkUserSql, [id], (checkError, existingUser) => {
         if (checkError) {
             return res.status(500).json({
-                message: "Failed to check user.",
-                error: checkError.message
+                message: "Failed to check user."
             });
         }
 
@@ -209,8 +204,7 @@ exports.updateUser = async (req, res) => {
         db.query(checkEmailSql, [email, id], async (emailError, emailUsers) => {
             if (emailError) {
                 return res.status(500).json({
-                    message: "Failed to check email.",
-                    error: emailError.message
+                    message: "Failed to check email."
                 });
             }
 
@@ -225,9 +219,9 @@ exports.updateUser = async (req, res) => {
                 let updateValues = [];
 
                 if (password && password.trim()) {
-                    if (password.length < 6) {
+                    if (password.length < 12) {
                         return res.status(400).json({
-                            message: "Password must be at least 6 characters."
+                            message: "Password must be at least 12 characters."
                         });
                     }
 
@@ -266,8 +260,7 @@ exports.updateUser = async (req, res) => {
                 db.query(updateSql, updateValues, (updateError) => {
                     if (updateError) {
                         return res.status(500).json({
-                            message: "Failed to update user.",
-                            error: updateError.message
+                            message: "Failed to update user."
                         });
                     }
 
@@ -277,8 +270,7 @@ exports.updateUser = async (req, res) => {
                 });
             } catch (hashError) {
                 return res.status(500).json({
-                    message: "Failed to secure password.",
-                    error: hashError.message
+                    message: "Failed to secure password."
                 });
             }
         });
@@ -288,6 +280,7 @@ exports.updateUser = async (req, res) => {
 exports.updateUserStatus = (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
+    if (Number(id) === Number(req.user.id) && status === "Inactive") return res.status(400).json({ message: "You cannot deactivate your own account." });
 
     if (!validStatuses.includes(status)) {
         return res.status(400).json({
@@ -304,8 +297,7 @@ exports.updateUserStatus = (req, res) => {
     db.query(sql, [status, id], (error, result) => {
         if (error) {
             return res.status(500).json({
-                message: "Failed to update user status.",
-                error: error.message
+                message: "Failed to update user status."
             });
         }
 
@@ -333,8 +325,7 @@ exports.deactivateUser = (req, res) => {
     db.query(sql, [id], (error, result) => {
         if (error) {
             return res.status(500).json({
-                message: "Failed to deactivate user.",
-                error: error.message
+                message: "Failed to deactivate user."
             });
         }
 
@@ -365,7 +356,7 @@ exports.deleteUser = (req, res) => {
 
     db.query("SELECT id, role FROM users WHERE id = ?", [targetId], (lookupError, rows) => {
         if (lookupError) {
-            return res.status(500).json({ message: "Failed to check user account.", error: lookupError.message });
+            return res.status(500).json({ message: "Failed to check user account." });
         }
         if (!rows.length) {
             return res.status(404).json({ message: "User not found." });
@@ -374,7 +365,7 @@ exports.deleteUser = (req, res) => {
         const deleteTarget = () => {
             db.query("DELETE FROM users WHERE id = ?", [targetId], (deleteError, result) => {
                 if (deleteError) {
-                    return res.status(500).json({ message: "Failed to delete user.", error: deleteError.message });
+                    return res.status(500).json({ message: "Failed to delete user." });
                 }
                 if (!result.affectedRows) {
                     return res.status(404).json({ message: "User not found." });
@@ -385,9 +376,9 @@ exports.deleteUser = (req, res) => {
 
         if (rows[0].role !== "admin") return deleteTarget();
 
-        db.query("SELECT COUNT(*) AS adminCount FROM users WHERE role = 'admin'", (countError, countRows) => {
+        db.query("SELECT COUNT(*) AS \"adminCount\" FROM users WHERE role = 'admin' AND status = 'Active'", (countError, countRows) => {
             if (countError) {
-                return res.status(500).json({ message: "Failed to verify administrator accounts.", error: countError.message });
+                return res.status(500).json({ message: "Failed to verify administrator accounts." });
             }
             if (Number(countRows[0]?.adminCount || 0) <= 1) {
                 return res.status(400).json({ message: "You cannot delete the last administrator account." });

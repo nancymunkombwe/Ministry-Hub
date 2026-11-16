@@ -21,20 +21,27 @@ const churchProfileRoutes = require("./src/routes/churchProfileRoutes");
 
 const app = express();
 
-app.use(cors());
+const frontendOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
+if (!process.env.JWT_SECRET || (process.env.NODE_ENV === "production" && process.env.JWT_SECRET.length < 32)) {
+    throw new Error("Configure a strong JWT_SECRET before starting the server.");
+}
+if (process.env.NODE_ENV === "production" && !process.env.FRONTEND_URL) {
+    throw new Error("Configure FRONTEND_URL in production.");
+}
+app.disable("x-powered-by");
+app.use(cors({ origin: frontendOrigin }));
 app.use(express.json());
 
 app.get("/", (req, res) => {
     res.send("Ministry Hub API Running...");
 });
 
-app.get("/api/test-db", (req, res) => {
+app.get("/api/health", (req, res) => {
     db.query("SELECT 1 + 1 AS result", (error, results) => {
         if (error) {
             return res.status(500).json({
                 success: false,
-                message: "Database connection failed",
-                error: error.message
+                message: "Database connection failed"
             });
         }
 
