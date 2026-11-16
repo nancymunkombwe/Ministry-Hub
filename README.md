@@ -1,4 +1,3 @@
-
 <div align="center">
 
 # MINISTRY HUB
@@ -13,11 +12,18 @@ A modern, full-stack church management system designed specifically for Seventh-
 ![Vite](https://img.shields.io/badge/Vite-Build_Tool-646CFF?style=for-the-badge&logo=vite&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-Backend-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-REST_API-000000?style=for-the-badge&logo=express&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-Database-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Cloud_Database-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white)
+![Render](https://img.shields.io/badge/Render-Backend-000000?style=for-the-badge&logo=render&logoColor=white)
+![Netlify](https://img.shields.io/badge/Netlify-Frontend-00C7B7?style=for-the-badge&logo=netlify&logoColor=white)
 ![JWT](https://img.shields.io/badge/JWT-Authentication-000000?style=for-the-badge&logo=jsonwebtokens)
 ![Status](https://img.shields.io/badge/Status-Completed-22C55E?style=for-the-badge)
 
-[Overview](#overview) • [Screenshots](#screenshots) • [Features](#features) • [Architecture](#system-architecture) • [Installation](#installation) • [Roadmap](#roadmap)
+![Deployment](https://img.shields.io/badge/Deployment-Live-22C55E?style=for-the-badge)
+
+**[Visit Live Application](https://ministry-hub.netlify.app/)**
+
+[Overview](#overview) • [Screenshots](#screenshots) • [Features](#features) • [Architecture](#system-architecture) • [Installation](#installation) • [Project Status](#project-status)
 
 </div>
 
@@ -319,10 +325,11 @@ These responsibilities represent intended use cases and do not necessarily corre
 
 | Technology | Purpose |
 |---|---|
-| MySQL | Original relational database |
-| MySQL Workbench | Database administration |
-| PostgreSQL | Planned cloud database migration |
-| Supabase | Proposed cloud database hosting |
+| PostgreSQL | Current relational database |
+| Supabase | Managed cloud PostgreSQL database |
+| Netlify | Live frontend hosting |
+| Render | Live backend API hosting |
+| MySQL | Original development database (legacy) |
 | Git | Version control |
 | GitHub | Source code management |
 | Visual Studio Code | Development environment |
@@ -355,13 +362,13 @@ The visual identity reflects trust, stewardship, organisation, professionalism a
 
 ```mermaid
 flowchart TD
-    A[Pastors and Elders] --> E[React Frontend]
+    A[Pastors and Elders] --> E[React Frontend - Netlify]
     B[Church Clerks] --> E
     C[Church Treasurers] --> E
     D[Administrators] --> E
 
     E --> F[REST API]
-    F --> G[Node.js and Express Backend]
+    F --> G[Node.js and Express Backend - Render]
 
     G --> H[Authentication]
     G --> I[Membership Management]
@@ -370,7 +377,7 @@ flowchart TD
     G --> L[Events and Communication]
     G --> M[Reports and Settings]
 
-    H --> N[(Relational Database)]
+    H --> N[(PostgreSQL - Supabase)]
     I --> N
     J --> N
     K --> N
@@ -426,7 +433,7 @@ The database supports the following information categories:
 | Church Information | Organisational information |
 | Settings | Administrative configurations |
 
-The original application uses MySQL. PostgreSQL and Supabase are intended to support future cloud deployment.
+The original MySQL database was migrated to PostgreSQL. The deployed application uses Supabase with 15 tables in the `ministry_private` schema. The Express backend connects directly to PostgreSQL using a pooled, TLS-verified connection. The browser communicates with the REST API rather than connecting directly to the database.
 
 ---
 
@@ -439,6 +446,7 @@ ministry-hub/
 │
 ├── frontend/          # React frontend
 ├── backend/           # Node.js and Express backend
+├── database/          # PostgreSQL schema (schema.sql)
 ├── screenshots/       # Application screenshots
 └── README.md          # Project documentation
 ```
@@ -449,13 +457,9 @@ ministry-hub/
 
 ### Prerequisites
 
-Ensure the following software is installed:
-
-- Node.js
-- npm
-- MySQL Server
-- MySQL Workbench or phpMyAdmin
+- Node.js and npm
 - Git
+- A separate Supabase project or PostgreSQL development database
 - Visual Studio Code (optional)
 
 ### 1. Clone the repository
@@ -467,72 +471,82 @@ cd ministry-hub
 
 ### 2. Configure the database
 
-Open MySQL Workbench and create the required database.
+Create a separate Supabase project. In its SQL Editor, run `database/schema.sql` once to initialise the 15 tables. Use fictional records for demonstrations. Do not run the schema against an existing production database without reviewing it first.
 
-```sql
-CREATE DATABASE IF NOT EXISTS ministry_hub;
-```
+From the Supabase **Connect** dialog, copy the Session pooler URI (port 5432). Replace the password placeholder with your database password, URL-encoding special characters as needed. Keep the URI private.
 
-Import the project's MySQL database schema.
+### 3. Configure and install the backend
 
-For a PostgreSQL-based deployment, use the corresponding migration scripts and database configuration.
-
-### 3. Configure environment variables
-
-Create the required environment files according to the application's configuration.
-
-Configure the following settings:
-
-- Database host
-- Database port
-- Database username
-- Database password
-- Database name
-- JWT secret
-- Backend port
-- Frontend API URL
-
-Never commit real database credentials, JWT secrets or sensitive environment variables to GitHub.
-
-### 4. Install backend dependencies
-
-```bash
+```powershell
 cd backend
-npm install
+Copy-Item .env.example .env
+npm ci
 ```
 
-### 5. Start the backend
+Edit `backend/.env` using the following template. All credential values are placeholders.
 
-```bash
+```dotenv
+PORT=5000
+NODE_ENV=development
+DATABASE_URL=YOUR_POSTGRESQL_CONNECTION_URI
+DB_SSL=true
+PG_CA_BASE64=YOUR_BASE64_ENCODED_CA_CERTIFICATE
+JWT_SECRET=YOUR_UNIQUE_RANDOM_SECRET
+FRONTEND_URL=http://localhost:5173
+ADMIN_NAME=Ministry Hub Administrator
+ADMIN_EMAIL=YOUR_ADMIN_EMAIL
+ADMIN_PASSWORD=YOUR_UNIQUE_ADMIN_PASSWORD
+```
+
+Use the provider CA certificate for TLS verification. Generate a random JWT secret and choose a unique administrator password of at least 12 characters. Never commit real credentials.
+
+### 4. Create the administrator and start the backend
+
+```powershell
+npm run create-admin
 npm run dev
 ```
 
-### 6. Install frontend dependencies
+Remove `ADMIN_PASSWORD` from `.env` after creating the account. Check the backend health endpoint at http://localhost:5000/api/health.
 
-Open a separate terminal from the project root.
+### 5. Configure and start the frontend
 
-```bash
+Open another terminal from the project root.
+
+```powershell
 cd frontend
-npm install
+Copy-Item .env.example .env
+npm ci
 ```
 
-### 7. Start the frontend
+Set `frontend/.env`:
 
-```bash
+```dotenv
+VITE_API_URL=http://localhost:5000/api
+```
+
+```powershell
 npm run dev
 ```
 
-### 8. Access Ministry Hub
+Open http://localhost:5173 and sign in using the administrator account.
 
-Open the local development URL displayed in the frontend terminal.
+---
 
-The default Vite development address is:
+## Cloud Deployment
 
-```text
-http://localhost:5173
-```
+**Live application:** https://ministry-hub.netlify.app/
 
-Ensure the backend and database are running before accessing administrative functionality.
+| Service | Purpose | Configuration |
+|---|---|---|
+| GitHub | Version control | `master` branch |
+| Netlify | React frontend | Base: `frontend`; build: `npm run build`; publish: `dist` |
+| Render | Express REST API | Root: `backend`; build: `npm ci`; start: `npm start` |
+| Supabase | PostgreSQL database | Separate project; `ministry_private` schema |
+
+Set `VITE_API_URL` on Netlify to the actual HTTPS Render backend URL followed by `/api`. Set `FRONTEND_URL` on Render to `https://ministry-hub.netlify.app` (without a trailing slash). Store the remaining backend secrets only in Render's environment settings.
+
+The deployment uses free hosting tiers, subject to provider quotas, inactivity policies and availability. It is intended for demonstration and portfolio use pending a formal production readiness review.
 
 ---
 
@@ -540,7 +554,7 @@ Ensure the backend and database are running before accessing administrative func
 
 Ministry Hub handles potentially sensitive church membership, personal and financial information.
 
-The application incorporates authentication and password hashing, with additional security measures planned before production deployment.
+The deployed application incorporates JWT authentication, password hashing, server-side role restrictions for financial information, restricted CORS and TLS certificate verification for database connections. These measures are not a substitute for a formal security audit. Full permission, dependency, privacy and reliability testing remains outstanding before handling real church records.
 
 Recommended security practices include:
 
@@ -559,7 +573,7 @@ Public demonstration screenshots and sample databases should contain fictional o
 
 ---
 
-## Roadmap
+## Development Milestones
 
 ### Phase 1 — Core Development
 
@@ -587,48 +601,24 @@ Public demonstration screenshots and sample databases should contain fictional o
 - [x] WhatsApp message interface
 - [x] Project documentation
 
-### Phase 3 — Adventist Ministry Expansion
+### Phase 3 — Cloud Migration and Deployment
 
-- [ ] Sabbath School management
-- [ ] Sabbath School attendance
-- [ ] Church departmental management
-- [ ] Adventist Youth Ministries (AYM)
-- [ ] Pathfinder Club management
-- [ ] Adventurer Club management
-- [ ] Personal Ministries management
-- [ ] Women's Ministries management
-- [ ] Dorcas Society management
-- [ ] Baptism records
-- [ ] Membership transfer management
-- [ ] Church board meeting management
-- [ ] Quarterly church reports
-- [ ] District and conference reporting
+- [x] PostgreSQL database migration
+- [x] Supabase database configuration
+- [x] Secure database connection
+- [x] Administrator account creation
+- [x] GitHub integration
+- [x] Backend deployment on Render
+- [x] Frontend deployment on Netlify
 
-### Phase 4 — Digital Innovation
+### Post-development maintenance
 
-- [ ] Member self-service portal
-- [ ] Online tithes and offerings
-- [ ] Mobile money integration
-- [ ] Automated financial reporting
-- [ ] QR code attendance
-- [ ] Automated Sabbath reminders
-- [ ] Automated birthday notifications
-- [ ] Email notifications
-- [ ] Expanded WhatsApp integration
-- [ ] Multi-church management
-- [ ] Mobile application
+- [ ] Formal security and access-control audit
+- [ ] Dependency vulnerability review
+- [ ] Database backup and recovery testing
+- [ ] Ongoing bug fixes and maintenance as needed
 
-### Phase 5 — Cloud Deployment
-
-- [ ] PostgreSQL database migration
-- [ ] Supabase cloud database configuration
-- [ ] Frontend deployment
-- [ ] Backend deployment
-- [ ] Custom domain
-- [ ] Automated database backups
-- [ ] Administrative audit logs
-- [ ] Production security testing
-- [ ] Public platform launch
+The current feature scope is complete. Additional ministry modules and integrations are not committed development milestones.
 
 ---
 
@@ -682,9 +672,13 @@ The project incorporates concepts from:
 
 ## Project Status
 
-Ministry Hub is currently under active development.
+**Development status: Completed (V2.0).**
 
-The core application supports church administrative processes, with additional SDA-specific modules, cloud deployment and production security improvements planned for future releases.
+**Deployment status: Live.**
+
+The current church management system has been developed and deployed as a portfolio demonstration. No further feature development is scheduled. Maintenance, security verification and reliability reviews remain separate from the completed feature scope.
+
+[Launch Ministry Hub](https://ministry-hub.netlify.app/)
 
 ---
 
